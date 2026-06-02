@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Test Socket.io</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  </head>
+  <body>
+    <h1>Test de conexión Socket.io</h1>
+    <input
+      id="token"
+      placeholder="Pega tu Firebase token aquí"
+      style="width: 400px"
+    />
+    <button onclick="connect()">Conectar</button>
+    <button onclick="sendPing()">Enviar Ping</button>
+    <pre id="logs"></pre>
+
+    <script>
+      let socket;
+
+      function log(msg) {
+        document.getElementById("logs").innerHTML += msg + "\n";
+      }
+
+      function connect() {
+        const token = document.getElementById("token").value;
+
+        socket = io("http://localhost:3001", {
+          auth: { token },
+        });
+
+        socket.on("connect", () => {
+          log("✅ Conectado: " + socket.id);
+        });
+
+        socket.on("disconnect", (reason) => {
+          log("❌ Desconectado: " + reason);
+        });
+
+        socket.on("connect_error", (err) => {
+          log("🚫 Error: " + err.message);
+        });
+
+        socket.on("pong", () => {
+          log("🏓 Pong recibido del servidor");
+        });
+      }
+
+      function sendPing() {
+        if (socket) {
+          socket.emit("ping");
+          log("🏓 Ping enviado");
+        }
+      }
+    </script>
+  </body>
+</html>
