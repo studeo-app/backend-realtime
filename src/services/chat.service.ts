@@ -3,7 +3,6 @@ import { getFirestore } from "../config/firebase.config.js";
 export interface ChatMessage {
   uid: string;
   username: string;
-  avatarUrl?: string | null;
   text: string;
   timestamp: string;
 }

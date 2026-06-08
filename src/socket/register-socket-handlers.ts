@@ -30,6 +30,10 @@ const emitRoomUsers = (io: SocketServer, roomId: string): void => {
   io.to(roomId).emit("roomUsers", getUsersByRoom(roomId));
 };
 
+const emitRoomUsersToSocket = (socket: TypedSocket, roomId: string): void => {
+  socket.emit("roomUsers", getUsersByRoom(roomId));
+};
+
 /**
  * Removes a socket from a room:
  * - Leaves the Socket.IO room
@@ -209,6 +213,15 @@ export const registerSocketHandlers = (io: SocketServer): void => {
         emitRoomUsers(io, leftRoom);
       }
     });
+
+    socket.on("roomUsersPrevisualization", (payload) => {
+      const roomId = payload.roomId?.trim();
+      if (!roomId) {
+        socket.emit("errorMessage", { code: "INVALID_ROOM", message: "roomId es obligatorio." });
+        return;
+      }
+      emitRoomUsersToSocket(socket, roomId);
+    })
 
     socket.on("message:send", (payload) => handleMessageSend(io, socket, payload));
 
