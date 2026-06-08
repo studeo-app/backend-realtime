@@ -5,6 +5,7 @@ export interface UserPresence {
   isMuted: boolean;
   isVideoOff: boolean;
   isScreenSharing: boolean;
+  // GUARDA EL URL DEL AVATAR
 }
 
 
@@ -102,3 +103,4 @@ export interface ServerToClientEvents {
   }) => void;
   pong: () => void;
 }
+

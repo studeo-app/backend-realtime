@@ -118,6 +118,8 @@ const handleJoinRoom = async (
     roomId,
     usersInRoom: getUsersByRoom(roomId).map((u) => ({ socketId: u.socketId, uid: u.uid }))
   });
+
+  console.log("Sala", getUsersByRoom(roomId));
 };
 
 const handleMessageSend = async (
@@ -196,6 +198,7 @@ export const registerSocketHandlers = (io: SocketServer): void => {
     socket.on("newUser", () => {
       upsertUser(socket.id, { uid: uid ?? null });
       emitUsersOnline(io);
+      console.log("Usuario nuevo:", getUser(socket.id));
     });
 
     socket.on("joinRoom", (payload) => handleJoinRoom(io, socket, payload));
