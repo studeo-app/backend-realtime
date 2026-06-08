@@ -191,7 +191,12 @@ export const registerSocketHandlers = (io: SocketServer): void => {
     const uid = socket.data.uid;
 
     // Persist uid in presence from the moment of connection
-    upsertUser(socket.id, { uid: uid ?? null });
+    upsertUser(socket.id, {
+      uid: uid ?? null,
+      username: socket.data.username ?? null,
+      name: socket.data.name ?? null,
+      avatarUrl: socket.data.avatarUrl ?? null,
+    });
 
     logger.info("Cliente conectado", {
       socketId: socket.id,
@@ -200,7 +205,12 @@ export const registerSocketHandlers = (io: SocketServer): void => {
     });
 
     socket.on("newUser", () => {
-      upsertUser(socket.id, { uid: uid ?? null });
+      upsertUser(socket.id, {
+        uid: uid ?? null,
+        username: socket.data.username ?? null,
+        name: socket.data.name ?? null,
+        avatarUrl: socket.data.avatarUrl ?? null,
+      });
       emitUsersOnline(io);
       console.log("Usuario nuevo:", getUser(socket.id));
     });

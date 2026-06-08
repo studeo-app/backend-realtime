@@ -7,6 +7,9 @@ export const upsertUser = (socketId: string, data?: Partial<UserPresence>): User
   const nextValue: UserPresence = {
     socketId,
     uid: data?.uid ?? previous?.uid ?? null,
+    username: data?.username ?? previous?.username ?? null,
+    name: data?.name ?? previous?.name ?? null,
+    avatarUrl: data?.avatarUrl ?? previous?.avatarUrl ?? null,
     roomId: data?.roomId ?? previous?.roomId ?? null,
     isMuted: data?.isMuted ?? previous?.isMuted ?? false,
     isVideoOff: data?.isVideoOff ?? previous?.isVideoOff ?? false,
