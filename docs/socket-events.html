@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Studeo Realtime API — Documentación de Eventos Socket.IO</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #0f172a;
+        --surface: #1e293b;
+        --surface-2: #0f172a;
+        --border: rgba(255,255,255,0.08);
+        --accent: #6366f1;
+        --accent-soft: rgba(99,102,241,0.15);
+        --success: #10b981;
+        --success-soft: rgba(16,185,129,0.12);
+        --danger: #ef4444;
+        --danger-soft: rgba(239,68,68,0.12);
+        --warning: #f59e0b;
+        --warning-soft: rgba(245,158,11,0.12);
+        --info: #38bdf8;
+        --info-soft: rgba(56,189,248,0.12);
+        --text: #f8fafc;
+        --text-muted: #94a3b8;
+        --font: 'Inter', sans-serif;
+        --mono: 'JetBrains Mono', monospace;
+        --radius: 12px;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        min-height: 100vh;
+        background-image:
+          radial-gradient(circle at 15% 15%, rgba(99,102,241,0.12) 0%, transparent 50%),
+          radial-gradient(circle at 85% 85%, rgba(16,185,129,0.08) 0%, transparent 50%);
+        background-attachment: fixed;
+      }
+
+      /* ── Sidebar ── */
+      .layout { display: flex; min-height: 100vh; }
+
+      .sidebar {
+        width: 260px;
+        flex-shrink: 0;
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        padding: 1.5rem 1rem;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .sidebar-logo {
+        font-size: 1.2rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #a5b4fc, #6366f1);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        padding: 0 0.5rem 1rem;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 0.5rem;
+      }
+
+      .sidebar-section {
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        padding: 0.75rem 0.5rem 0.25rem;
+      }
+
+      .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.15s;
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+      }
+
+      .nav-link:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+      .nav-link.active { background: var(--accent-soft); color: #a5b4fc; }
+
+      .badge-c2s {
+        margin-left: auto;
+        font-size: 0.6rem;
+        padding: 0.1rem 0.35rem;
+        border-radius: 4px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      .badge-s2c {
+        margin-left: auto;
+        font-size: 0.6rem;
+        padding: 0.1rem 0.35rem;
+        border-radius: 4px;
+        background: var(--success-soft);
+        color: var(--success);
+        font-weight: 600;
+      }
+
+      /* ── Main content ── */
+      .main {
+        flex: 1;
+        padding: 2.5rem 3rem;
+        max-width: 900px;
+      }
+
+      .page-header {
+        margin-bottom: 2.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .page-header h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .page-header p {
+        color: var(--text-muted);
+        margin-top: 0.5rem;
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+
+      .meta-badges {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+      }
+
+      .meta-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.3rem 0.8rem;
+        border-radius: 9999px;
+        font-size: 0.8rem;
+        font-weight: 500;
+      }
+
+      .meta-badge.port { background: var(--accent-soft); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); }
+      .meta-badge.auth { background: var(--warning-soft); color: var(--warning); border: 1px solid rgba(245,158,11,0.3); }
+      .meta-badge.version { background: var(--success-soft); color: var(--success); border: 1px solid rgba(16,185,129,0.3); }
+
+      /* ── Event cards ── */
+      .section-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: var(--text);
+        margin: 2.5rem 0 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .direction-label {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 6px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+      }
+
+      .c2s { background: var(--accent-soft); color: #a5b4fc; }
+      .s2c { background: var(--success-soft); color: var(--success); }
+
+      .event-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        margin-bottom: 1.25rem;
+        overflow: hidden;
+        transition: border-color 0.2s;
+      }
+
+      .event-card:hover { border-color: rgba(99,102,241,0.35); }
+
+      .event-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .event-name {
+        font-family: var(--mono);
+        font-size: 1rem;
+        font-weight: 500;
+        color: var(--text);
+        flex: 1;
+      }
+
+      .event-summary {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        flex: 2;
+      }
+
+      .chevron {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        transition: transform 0.2s;
+      }
+
+      .event-card.open .chevron { transform: rotate(180deg); }
+
+      .event-body {
+        display: none;
+        padding: 0 1.25rem 1.25rem;
+        border-top: 1px solid var(--border);
+      }
+
+      .event-card.open .event-body { display: block; }
+
+      .event-body p {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        line-height: 1.6;
+        margin: 1rem 0;
+      }
+
+      /* ── Sub-sections inside event body ── */
+      .sub-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin: 1.25rem 0 0.5rem;
+      }
+
+      /* ── Code blocks ── */
+      pre {
+        background: #020617;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem;
+        overflow-x: auto;
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        line-height: 1.6;
+        color: #e2e8f0;
+      }
+
+      .hlstring { color: #86efac; }
+      .hlkey { color: #a5b4fc; }
+      .hltype { color: #67e8f9; }
+      .hlcomment { color: #64748b; font-style: italic; }
+      .hlnumber { color: #fca5a5; }
+
+      /* ── Tables ── */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+        margin: 0.5rem 0;
+      }
+
+      th {
+        background: rgba(255,255,255,0.03);
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.6rem 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+
+      td {
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+        color: var(--text);
+        vertical-align: top;
+      }
+
+      td code {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        background: rgba(99,102,241,0.12);
+        color: #a5b4fc;
+        padding: 0.1rem 0.35rem;
+        border-radius: 4px;
+      }
+
+      td:last-child { color: var(--text-muted); }
+
+      /* ── Error codes ── */
+      .error-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+      .error-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.6rem 0.75rem;
+        border-radius: 8px;
+        background: var(--danger-soft);
+        border: 1px solid rgba(239,68,68,0.2);
+        font-size: 0.85rem;
+      }
+
+      .error-code {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--danger);
+        white-space: nowrap;
+      }
+
+      .error-desc { color: var(--text-muted); line-height: 1.5; }
+
+      .emits-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.6rem 0.75rem;
+        border-radius: 8px;
+        background: var(--success-soft);
+        border: 1px solid rgba(16,185,129,0.2);
+        font-size: 0.85rem;
+        margin-bottom: 0.4rem;
+      }
+
+      .emits-code {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--success);
+        white-space: nowrap;
+      }
+
+      .emits-desc { color: var(--text-muted); line-height: 1.5; }
+
+      /* ── Auth section ── */
+      .auth-box {
+        background: var(--warning-soft);
+        border: 1px solid rgba(245,158,11,0.3);
+        border-radius: var(--radius);
+        padding: 1.25rem;
+        margin-bottom: 2rem;
+      }
+
+      .auth-box h3 { color: var(--warning); font-size: 0.95rem; margin-bottom: 0.5rem; }
+      .auth-box p { color: var(--text-muted); font-size: 0.875rem; line-height: 1.6; }
+
+      /* ── Edge cases table ── */
+      .edge-table td:nth-child(1) { font-weight: 600; color: #94a3b8; font-family: var(--mono); font-size: 0.78rem; }
+      .edge-table td:nth-child(3) { color: var(--info); font-family: var(--mono); font-size: 0.78rem; }
+
+      /* ── Required badge ── */
+      .req { color: var(--danger); font-weight: 700; font-size: 0.85rem; }
+      .opt { color: var(--text-muted); font-size: 0.85rem; }
+
+      @media (max-width: 768px) {
+        .sidebar { display: none; }
+        .main { padding: 1.5rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <!-- Sidebar -->
+      <nav class="sidebar">
+        <div class="sidebar-logo">⚡ Studeo Realtime</div>
+
+        <div class="sidebar-section">General</div>
+        <a class="nav-link" href="#overview">Resumen</a>
+        <a class="nav-link" href="#auth">Autenticación</a>
+        <a class="nav-link" href="#http">Endpoints HTTP</a>
+
+        <div class="sidebar-section">Cliente → Servidor</div>
+        <a class="nav-link" href="#newUser">newUser <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#joinRoom">joinRoom <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#leaveRoom">leaveRoom <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#messageSend">message:send <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#mediaStatus">media:status <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#webrtc">webrtc:* <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#ping">ping <span class="badge-c2s">C→S</span></a>
+
+        <div class="sidebar-section">Servidor → Cliente</div>
+        <a class="nav-link" href="#s2c">Todos los eventos <span class="badge-s2c">S→C</span></a>
+
+        <div class="sidebar-section">Referencia</div>
+        <a class="nav-link" href="#models">Modelos de datos</a>
+        <a class="nav-link" href="#edge">Casos edge</a>
+      </nav>
+
+      <!-- Main -->
+      <main class="main">
+        <!-- Header -->
+        <div class="page-header" id="overview">
+          <h1>Studeo Realtime API</h1>
+          <p>Documentación de todos los eventos Socket.IO del servidor de tiempo real. Este servidor gestiona presencia de usuarios, mensajería instantánea en salas y señalización WebRTC.</p>
+          <div class="meta-badges">
+            <span class="meta-badge port">🔌 Puerto 3001 (dev)</span>
+            <span class="meta-badge auth">🔐 Firebase JWT requerido</span>
+            <span class="meta-badge version">Socket.IO v4.7</span>
+          </div>
+        </div>
+
+        <!-- Auth -->
+        <div class="auth-box" id="auth">
+          <h3>🔐 Autenticación — Requerida en CADA conexión</h3>
+          <p>
+            Todo socket debe enviar un <strong>Firebase ID Token</strong> en el handshake.
+            El servidor verifica la firma, expiración y proyecto antes de aceptar la conexión.
+            Si el token es inválido o falta, la conexión es rechazada.
+          </p>
+          <pre style="margin-top:0.75rem"><span class="hlcomment">// Cliente — cómo conectarse correctamente</span>
+<span class="hlkey">const</span> token = <span class="hlkey">await</span> firebase.auth().currentUser.<span class="hlstring">getIdToken</span>();
+<span class="hlkey">const</span> socket = <span class="hlstring">io</span>(<span class="hlstring">"http://localhost:3001"</span>, {
+  auth: { token }  <span class="hlcomment">// ← campo obligatorio</span>
+});</pre>
+          <p style="margin-top:0.75rem">
+            En caso de error de autenticación el socket recibe el evento <code>connect_error</code> con el mensaje <code>Authentication error: Token not provided</code> o <code>Authentication error: Invalid token</code>.
+          </p>
+        </div>
+
+        <!-- HTTP -->
+        <h2 class="section-title" id="http">Endpoints HTTP</h2>
+
+        <div class="event-card open">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">GET /</span>
+            <span class="event-summary">Información del servicio</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>No requiere autenticación. Útil para confirmar que el servidor está corriendo.</p>
+            <div class="sub-title">Respuesta</div>
+            <pre>{ <span class="hlkey">"name"</span>: <span class="hlstring">"backend-realtime"</span>, <span class="hlkey">"status"</span>: <span class="hlstring">"running"</span> }</pre>
+          </div>
+        </div>
+
+        <div class="event-card open">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">GET /health</span>
+            <span class="event-summary">Health check (usado por Render)</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>No requiere autenticación. Render usa este endpoint para verificar que el proceso está vivo.</p>
+            <div class="sub-title">Respuesta</div>
+            <pre>{
+  <span class="hlkey">"status"</span>: <span class="hlstring">"ok"</span>,
+  <span class="hlkey">"uptimeSeconds"</span>: <span class="hlnumber">3612.5</span>,
+  <span class="hlkey">"timestamp"</span>: <span class="hlstring">"2026-06-07T23:00:00.000Z"</span>
+}</pre>
+          </div>
+        </div>
+
+        <!-- C→S events -->
+        <h2 class="section-title">Cliente → Servidor <span class="direction-label c2s">C→S</span></h2>
+
+        <!-- newUser -->
+        <div class="event-card" id="newUser">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">newUser</span>
+            <span class="event-summary">Registra presencia global del usuario</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>Registra al usuario en la lista global de conectados y notifica a todos. El servidor obtiene uid y username directamente del token (no del payload).</p>
+            <div class="sub-title">Payload</div>
+            <pre><span class="hlcomment">// Sin payload — el servidor usa socket.data.uid / socket.data.username</span>
+socket.emit(<span class="hlstring">"newUser"</span>);</pre>
+            <div class="sub-title">Emite en respuesta</div>
+            <div class="emits-item">
+              <span class="emits-code">usersOnline</span>
+              <span class="emits-desc">Lista actualizada de UserPresence[] → broadcast a TODOS los sockets conectados.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- joinRoom -->
+        <div class="event-card" id="joinRoom">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">joinRoom</span>
+            <span class="event-summary">Unirse a una sala de estudio</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>Une el socket a la sala especificada. Verifica existencia en Firestore y previene que el mismo usuario (mismo uid) ocupe la misma sala desde múltiples pestañas.</p>
+            <div class="sub-title">Payload</div>
+            <pre>socket.emit(<span class="hlstring">"joinRoom"</span>, {
+  roomId: <span class="hlstring">"abc123"</span>  <span class="hlcomment">// ← requerido</span>
+});</pre>
+            <div class="sub-title">Campos</div>
+            <table>
+              <tr><th>Campo</th><th>Tipo</th><th>¿Req?</th><th>Descripción</th></tr>
+              <tr><td><code>roomId</code></td><td><code>string</code></td><td><span class="req">✅</span></td><td>ID de la sala (debe existir en Firestore)</td></tr>
+            </table>
+            <div class="sub-title">Emite en éxito</div>
+            <div class="emits-item">
+              <span class="emits-code">userJoined</span>
+              <span class="emits-desc">UserPresence del nuevo miembro → otros usuarios de la sala.</span>
+            </div>
+            <div class="emits-item">
+              <span class="emits-code">roomUsers</span>
+              <span class="emits-desc">Lista actualizada UserPresence[] → todos en la sala.</span>
+            </div>
+            <div class="sub-title">Errores posibles</div>
+            <div class="error-list">
+              <div class="error-item"><span class="error-code">INVALID_ROOM</span><span class="error-desc">roomId vacío o ausente.</span></div>
+              <div class="error-item"><span class="error-code">ROOM_NOT_FOUND</span><span class="error-desc">La sala no existe en Firestore.</span></div>
+              <div class="error-item"><span class="error-code">ALREADY_IN_ROOM</span><span class="error-desc">El mismo uid ya está en esa sala desde otro socket. No bloquea unirse a una sala diferente.</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- leaveRoom -->
+        <div class="event-card" id="leaveRoom">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">leaveRoom</span>
+            <span class="event-summary">Salir de la sala actual</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>Elimina al socket de la sala y actualiza la presencia. Si no se pasa roomId, usa la sala activa del socket. Si el socket cierra la pestaña sin emitir este evento, el servidor ejecuta la misma lógica en <code>disconnect</code>.</p>
+            <div class="sub-title">Payload</div>
+            <pre><span class="hlcomment">// Opcional: sin roomId usa la sala actual del socket</span>
+socket.emit(<span class="hlstring">"leaveRoom"</span>);
+<span class="hlcomment">// O con roomId explícito:</span>
+socket.emit(<span class="hlstring">"leaveRoom"</span>, <span class="hlstring">"abc123"</span>);</pre>
+            <div class="sub-title">Emite en éxito</div>
+            <div class="emits-item">
+              <span class="emits-code">userLeft</span>
+              <span class="emits-desc">{ socketId, roomId } → otros usuarios de la sala.</span>
+            </div>
+            <div class="emits-item">
+              <span class="emits-code">roomUsers</span>
+              <span class="emits-desc">Lista actualizada → sala (ahora sin el usuario).</span>
+            </div>
+            <p style="margin-top:0.75rem; font-size:0.82rem; color:var(--warning)">
+              💡 Si el socket no está en ninguna sala, el evento es un no-op silencioso.
+            </p>
+          </div>
+        </div>
+
+        <!-- message:send -->
+        <div class="event-card" id="messageSend">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">message:send</span>
+            <span class="event-summary">Enviar un mensaje de chat a la sala activa</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>Envía un mensaje a la sala en la que actualmente está el socket. El broadcast ocurre <strong>inmediatamente</strong>; la persistencia en Firestore es asíncrona y no bloquea.</p>
+            <div class="sub-title">Payload</div>
+            <pre>socket.emit(<span class="hlstring">"message:send"</span>, {
+  text: <span class="hlstring">"Hola a todos 👋"</span>  <span class="hlcomment">// ← requerido, no puede ser vacío</span>
+});</pre>
+            <div class="sub-title">Campos</div>
+            <table>
+              <tr><th>Campo</th><th>Tipo</th><th>¿Req?</th><th>Descripción</th></tr>
+              <tr><td><code>text</code></td><td><code>string</code></td><td><span class="req">✅</span></td><td>Contenido del mensaje. Texto vacío o solo espacios es rechazado.</td></tr>
+            </table>
+            <p style="margin-top:0.75rem; font-size:0.82rem">
+              ⚠️ NO incluir <code>roomId</code> — el servidor lo obtiene del estado interno del socket (in-memory store).
+            </p>
+            <div class="sub-title">Emite en éxito</div>
+            <div class="emits-item">
+              <span class="emits-code">message:new</span>
+              <span class="emits-desc">{ uid, username, text, timestamp } → TODOS en la sala (incluido el emisor).</span>
+            </div>
+            <div class="sub-title">Errores posibles</div>
+            <div class="error-list">
+              <div class="error-item"><span class="error-code">UNAUTHORIZED</span><span class="error-desc">El socket no tiene uid o username válido (token sin datos de perfil).</span></div>
+              <div class="error-item"><span class="error-code">NO_ROOM</span><span class="error-desc">El socket no está unido a ninguna sala.</span></div>
+              <div class="error-item"><span class="error-code">EMPTY_MESSAGE</span><span class="error-desc">El campo text está vacío o contiene solo espacios en blanco.</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- media:status -->
+        <div class="event-card" id="mediaStatus">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">media:status</span>
+            <span class="event-summary">Actualizar estado de audio/video/pantalla</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>Notifica a los demás usuarios de la sala el estado actual de los periféricos AV. El servidor actualiza la presencia y reenvía el objeto completo.</p>
+            <div class="sub-title">Payload</div>
+            <pre>socket.emit(<span class="hlstring">"media:status"</span>, {
+  roomId: <span class="hlstring">"abc123"</span>,
+  isMuted: <span class="hlnumber">true</span>,
+  isVideoOff: <span class="hlnumber">false</span>,
+  isScreenSharing: <span class="hlnumber">false</span>
+});</pre>
+            <div class="sub-title">Campos</div>
+            <table>
+              <tr><th>Campo</th><th>Tipo</th><th>¿Req?</th><th>Descripción</th></tr>
+              <tr><td><code>roomId</code></td><td><code>string</code></td><td><span class="req">✅</span></td><td>Sala donde reportar el estado</td></tr>
+              <tr><td><code>isMuted</code></td><td><code>boolean</code></td><td><span class="opt">❌</span></td><td>Micrófono silenciado. Default: mantiene valor anterior.</td></tr>
+              <tr><td><code>isVideoOff</code></td><td><code>boolean</code></td><td><span class="opt">❌</span></td><td>Cámara desactivada.</td></tr>
+              <tr><td><code>isScreenSharing</code></td><td><code>boolean</code></td><td><span class="opt">❌</span></td><td>Compartiendo pantalla.</td></tr>
+            </table>
+            <div class="sub-title">Emite en éxito</div>
+            <div class="emits-item">
+              <span class="emits-code">media:status</span>
+              <span class="emits-desc">UserPresence completo → otros usuarios de la sala.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- webrtc:* -->
+        <div class="event-card" id="webrtc">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">webrtc:offer / webrtc:answer / webrtc:ice-candidate</span>
+            <span class="event-summary">Señalización WebRTC (relay puro)</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>El servidor actúa como relay — reenvía el payload directamente al socket destino sin interpretarlo. Se añade <code>fromSocketId</code> para que el receptor sepa el origen.</p>
+            <div class="sub-title">Payload (igual para los tres eventos)</div>
+            <pre>socket.emit(<span class="hlstring">"webrtc:offer"</span>, {
+  roomId: <span class="hlstring">"abc123"</span>,
+  toSocketId: <span class="hlstring">"socket-id-destino"</span>,
+  offer: { <span class="hlcomment">/* RTCSessionDescriptionInit */</span> }
+});
+<span class="hlcomment">// Ídem para webrtc:answer (campo answer) y webrtc:ice-candidate (campo candidate)</span></pre>
+            <div class="sub-title">Emite en éxito</div>
+            <div class="emits-item">
+              <span class="emits-code">webrtc:offer/answer/ice-candidate</span>
+              <span class="emits-desc">{ fromSocketId, roomId, offer/answer/candidate } → socket toSocketId.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ping -->
+        <div class="event-card" id="ping">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">ping</span>
+            <span class="event-summary">Verificar conexión activa</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <pre>socket.emit(<span class="hlstring">"ping"</span>);
+socket.on(<span class="hlstring">"pong"</span>, () => console.log(<span class="hlstring">"vivo"</span>));</pre>
+          </div>
+        </div>
+
+        <!-- S→C events -->
+        <h2 class="section-title" id="s2c">Servidor → Cliente <span class="direction-label s2c">S→C</span></h2>
+
+        <table>
+          <tr><th>Evento</th><th>Payload</th><th>Cuándo se emite</th><th>Destinatario</th></tr>
+          <tr><td><code>usersOnline</code></td><td><code>UserPresence[]</code></td><td>Tras newUser o disconnect</td><td>Todos los sockets</td></tr>
+          <tr><td><code>roomUsers</code></td><td><code>UserPresence[]</code></td><td>joinRoom / leaveRoom / disconnect</td><td>Miembros de la sala</td></tr>
+          <tr><td><code>userJoined</code></td><td><code>UserPresence</code></td><td>Nuevo miembro entra a la sala</td><td>Otros miembros</td></tr>
+          <tr><td><code>userLeft</code></td><td><code>{ socketId, roomId }</code></td><td>leaveRoom o disconnect</td><td>Otros miembros</td></tr>
+          <tr><td><code>message:new</code></td><td><code>{ uid, username, text, timestamp }</code></td><td>message:send exitoso</td><td>Todos en la sala (incluye emisor)</td></tr>
+          <tr><td><code>message:error</code></td><td><code>{ code, message }</code></td><td>Error en message:send</td><td>El socket emisor</td></tr>
+          <tr><td><code>errorMessage</code></td><td><code>{ code, message }</code></td><td>Error general (joinRoom, media…)</td><td>El socket emisor</td></tr>
+          <tr><td><code>media:status</code></td><td><code>UserPresence</code></td><td>media:status recibido</td><td>Otros miembros</td></tr>
+          <tr><td><code>webrtc:offer</code></td><td><code>{ fromSocketId, roomId, offer }</code></td><td>webrtc:offer recibido</td><td>Socket toSocketId</td></tr>
+          <tr><td><code>webrtc:answer</code></td><td><code>{ fromSocketId, roomId, answer }</code></td><td>webrtc:answer recibido</td><td>Socket toSocketId</td></tr>
+          <tr><td><code>webrtc:ice-candidate</code></td><td><code>{ fromSocketId, roomId, candidate }</code></td><td>webrtc:ice-candidate recibido</td><td>Socket toSocketId</td></tr>
+          <tr><td><code>pong</code></td><td>—</td><td>ping recibido</td><td>El socket emisor</td></tr>
+        </table>
+
+        <!-- Models -->
+        <h2 class="section-title" id="models">Modelos de datos</h2>
+
+        <div class="event-card open">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">UserPresence</span>
+            <span class="event-summary">Estado de presencia de un socket</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <pre><span class="hlkey">interface</span> <span class="hltype">UserPresence</span> {
+  socketId:       <span class="hltype">string</span>;        <span class="hlcomment">// ID único del socket (ephemeral)</span>
+  uid:            <span class="hltype">string | null</span>; <span class="hlcomment">// Firebase UID del usuario</span>
+  roomId:         <span class="hltype">string | null</span>; <span class="hlcomment">// null si no está en ninguna sala</span>
+  isMuted:        <span class="hltype">boolean</span>;
+  isVideoOff:     <span class="hltype">boolean</span>;
+  isScreenSharing:<span class="hltype">boolean</span>;
+}</pre>
+          </div>
+        </div>
+
+        <div class="event-card open">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">MessageNewPayload</span>
+            <span class="event-summary">Mensaje de chat emitido a la sala</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <pre><span class="hlkey">interface</span> <span class="hltype">MessageNewPayload</span> {
+  uid:       <span class="hltype">string</span>;  <span class="hlcomment">// Firebase UID del emisor</span>
+  username:  <span class="hltype">string</span>;  <span class="hlcomment">// Username del perfil</span>
+  text:      <span class="hltype">string</span>;  <span class="hlcomment">// Contenido del mensaje</span>
+  timestamp: <span class="hltype">string</span>;  <span class="hlcomment">// ISO 8601, generado en el servidor</span>
+}</pre>
+          </div>
+        </div>
+
+        <!-- Edge cases -->
+        <h2 class="section-title" id="edge">Casos edge validados</h2>
+
+        <table class="edge-table">
+          <tr><th>#</th><th>Escenario</th><th>Respuesta del servidor</th></tr>
+          <tr><td>1</td><td>Conexión sin token en handshake</td><td><code>connect_error: Token not provided</code></td></tr>
+          <tr><td>2</td><td>Token de Firebase expirado o firma inválida</td><td><code>connect_error: Invalid token</code></td></tr>
+          <tr><td>3</td><td>joinRoom con roomId vacío</td><td><code>errorMessage { INVALID_ROOM }</code></td></tr>
+          <tr><td>4</td><td>joinRoom a sala inexistente en Firestore</td><td><code>errorMessage { ROOM_NOT_FOUND }</code></td></tr>
+          <tr><td>5</td><td>joinRoom con mismo uid ya en esa sala</td><td><code>errorMessage { ALREADY_IN_ROOM }</code> — no afecta otras salas</td></tr>
+          <tr><td>6</td><td>joinRoom cuando ya estás en otra sala</td><td>Sale automáticamente de la sala anterior primero</td></tr>
+          <tr><td>7</td><td>message:send sin estar en ninguna sala</td><td><code>message:error { NO_ROOM }</code></td></tr>
+          <tr><td>8</td><td>message:send con texto vacío / solo espacios</td><td><code>message:error { EMPTY_MESSAGE }</code></td></tr>
+          <tr><td>9</td><td>message:send con uid ausente en socket.data</td><td><code>message:error { UNAUTHORIZED }</code></td></tr>
+          <tr><td>10</td><td>message:send con username ausente</td><td><code>message:error { UNAUTHORIZED }</code></td></tr>
+          <tr><td>11</td><td>leaveRoom sin estar en ninguna sala</td><td>No-op silencioso</td></tr>
+          <tr><td>12</td><td>Cierre de pestaña sin emitir leaveRoom</td><td>Igual que leaveRoom: notifica userLeft, limpia presencia</td></tr>
+          <tr><td>13</td><td>media:status con roomId vacío</td><td><code>errorMessage { INVALID_ROOM }</code></td></tr>
+          <tr><td>14</td><td>Error de Firestore al persistir mensaje</td><td>Se loguea el error; el broadcast ya ocurrió (no se interrumpe)</td></tr>
+        </table>
+      </main>
+    </div>
+
+    <script>
+      function toggle(header) {
+        const card = header.closest('.event-card');
+        card.classList.toggle('open');
+      }
+    </script>
+  </body>
+</html>

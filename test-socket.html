@@ -1,57 +1,919 @@
 <!doctype html>
-<html>
-  <head>
-    <title>Test Socket.io</title>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  </head>
-  <body>
-    <h1>Test de conexión Socket.io</h1>
-    <input
-      id="token"
-      placeholder="Pega tu Firebase token aquí"
-      style="width: 400px"
-    />
-    <button onclick="connect()">Conectar</button>
-    <button onclick="sendPing()">Enviar Ping</button>
-    <pre id="logs"></pre>
+<html lang="es">
 
-    <script>
-      let socket;
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Socket.io Testing Dashboard</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <!-- Socket.io Client Library -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --panel-bg: rgba(30, 41, 59, 0.7);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --accent-primary: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-success: #10b981;
+      --accent-danger: #ef4444;
+      --accent-warning: #f59e0b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --input-bg: rgba(15, 23, 42, 0.6);
+      --font-sans: 'Outfit', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
 
-      function log(msg) {
-        document.getElementById("logs").innerHTML += msg + "\n";
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      background-image:
+        radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 40%);
+      background-attachment: fixed;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 1rem;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.4rem 0.8rem;
+      border-radius: 9999px;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: var(--accent-danger);
+      transition: all 0.3s ease;
+    }
+
+    .status-badge.connected {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: var(--accent-success);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .grid-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      flex: 1;
+    }
+
+    @media (max-width: 1024px) {
+      .grid-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      border-left: 3px solid var(--accent-primary);
+      padding-left: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    input,
+    select {
+      flex: 1;
+      background: var(--input-bg);
+      border: 1px solid var(--panel-border);
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+    }
+
+    button {
+      background: var(--accent-primary);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.25rem;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+    }
+
+    button:hover {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+    }
+
+    button.secondary:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    button.success {
+      background: var(--accent-success);
+    }
+
+    button.danger {
+      background: var(--accent-danger);
+    }
+
+    .media-controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+    }
+
+    .media-btn {
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--panel-border);
+      color: var(--text-muted);
+    }
+
+    .media-btn.active {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: var(--accent-primary);
+      color: var(--text-main);
+    }
+
+    .media-btn.active.muted {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: var(--accent-danger);
+    }
+
+    .list-container {
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.3);
+      padding: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .user-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.02);
+      font-size: 0.85rem;
+    }
+
+    .user-badges {
+      display: flex;
+      gap: 0.3rem;
+    }
+
+    .badge {
+      font-size: 0.7rem;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .badge.mic {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--accent-danger);
+    }
+
+    .badge.video {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--accent-danger);
+    }
+
+    .badge.screen {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--accent-success);
+    }
+
+    .badge.self {
+      background: rgba(99, 102, 241, 0.2);
+      color: var(--accent-primary);
+    }
+
+    .chat-history {
+      height: 250px;
+      overflow-y: auto;
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.4);
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .chat-msg {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      max-width: 85%;
+    }
+
+    .chat-msg.self {
+      align-self: flex-end;
+    }
+
+    .chat-msg-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .chat-msg-header .name {
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .chat-msg-bubble {
+      padding: 0.6rem 0.8rem;
+      border-radius: 12px;
+      border-top-left-radius: 2px;
+      background: rgba(255, 255, 255, 0.05);
+      font-size: 0.9rem;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .chat-msg.self .chat-msg-bubble {
+      background: var(--accent-primary);
+      border-radius: 12px;
+      border-top-right-radius: 2px;
+    }
+
+    .log-console {
+      flex: 1;
+      min-height: 200px;
+      max-height: 350px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      background: #020617;
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .log-entry {
+      line-height: 1.5;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+      padding-bottom: 0.2rem;
+      white-space: pre-wrap;
+    }
+
+    .log-entry .time {
+      color: var(--text-muted);
+      margin-right: 0.5rem;
+    }
+
+    .log-entry.info {
+      color: #38bdf8;
+    }
+
+    .log-entry.success {
+      color: var(--accent-success);
+    }
+
+    .log-entry.warning {
+      color: var(--accent-warning);
+    }
+
+    .log-entry.danger {
+      color: var(--accent-danger);
+    }
+
+    .log-entry.ping {
+      color: #a78bfa;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div>
+      <h1>Socket.io Realtime Test Bench</h1>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem;">Interacción y depuración en tiempo
+        real</p>
+    </div>
+    <div id="statusBadge" class="status-badge">
+      <div class="status-dot"></div>
+      <span id="statusText">Desconectado</span>
+    </div>
+  </header>
+
+  <div class="grid-layout">
+    <!-- Columna izquierda: Controles de Conexión, Usuario y Canales -->
+    <div class="column">
+      <!-- Conexión -->
+      <div class="panel">
+        <div class="panel-title">Conexión al Servidor</div>
+        <div class="form-group">
+          <label for="serverUrl">URL del Servidor Realtime</label>
+          <input type="text" id="serverUrl" value="http://localhost:3001" placeholder="http://localhost:3001">
+        </div>
+        <div class="form-group">
+          <label for="token">Firebase ID Token (JWT)</label>
+          <input type="text" id="token" placeholder="Pega tu Firebase ID Token aquí para autenticarte">
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button id="btnConnect" onclick="connect()" style="flex: 1;">Conectar</button>
+          <button id="btnDisconnect" onclick="disconnect()" class="danger"
+            style="flex: 1; display: none;">Desconectar</button>
+          <button onclick="sendPing()" class="secondary">🏓 Ping</button>
+        </div>
+      </div>
+
+      <!-- Usuario & Room -->
+      <div class="panel">
+        <div class="panel-title">Gestión de Usuario y Salas</div>
+
+        <div class="form-group">
+          <label>Presencia global (newUser)</label>
+          <div class="input-row">
+            <button onclick="setUsername()" style="width: 100%;">Registrar Presencia (newUser)</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="roomId">ID de Sala (Room ID)</label>
+          <div class="input-row">
+            <input type="text" id="roomId" placeholder="Ej. sala-general">
+            <button onclick="joinRoom()" class="success">Unirse</button>
+            <button onclick="leaveRoom()" class="danger">Salir</button>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem;">
+          <!-- Duplicate requestHistory implementation removed; using the earlier version above -->
+        </div>
+      </div>
+
+      <!-- Estado Multimedia -->
+      <div class="panel">
+        <div class="panel-title">Multimedia (WebRTC / Presencia)</div>
+        <div class="media-controls">
+          <button id="btnMute" class="media-btn" onclick="toggleMedia('mute')">🎙️ Silenciado</button>
+          <button id="btnVideo" class="media-btn" onclick="toggleMedia('video')">📷 Video Apagado</button>
+          <button id="btnScreen" class="media-btn" onclick="toggleMedia('screen')">🖥️ Compartir Pantalla</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Columna derecha: Usuarios activos, Chat e Historial -->
+    <div class="column">
+      <!-- Usuarios -->
+      <div class="panel">
+        <div class="panel-title">Usuarios Conectados</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+          <div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem;">En esta Sala (<span
+                id="countRoomUsers">0</span>)</div>
+            <div id="roomUsersList" class="list-container">
+              <div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding-top: 1rem;">No hay
+                sala activa</div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem;">Online Global (<span
+                id="countOnlineUsers">0</span>)</div>
+            <div id="onlineUsersList" class="list-container">
+              <div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding-top: 1rem;">Sin
+                conexión</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat -->
+      <div class="panel">
+        <div class="panel-title">Sala de Chat <span id="activeRoomLabel"
+            style="font-size: 0.85rem; color: var(--accent-primary); font-weight: normal;"></span></div>
+        <div id="chatHistory" class="chat-history">
+          <div style="color: var(--text-muted); text-align: center; margin-top: 5rem; font-size: 0.9rem;">Únete a una
+            sala para ver los mensajes.</div>
+        </div>
+        <div class="input-row">
+          <input type="text" id="chatMessage" placeholder="Escribe tu mensaje..."
+            onkeypress="handleChatKeyPress(event)">
+          <button onclick="sendChatMessage()">Enviar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel inferior: Consola de Eventos -->
+  <div class="panel" style="flex: none;">
+    <div class="panel-title">
+      Consola de Eventos Recibidos
+      <button onclick="clearLogs()" class="secondary" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;">Limpiar
+        Consola</button>
+    </div>
+    <div id="logConsole" class="log-console"></div>
+  </div>
+
+  <script>
+    let socket = null;
+    let activeRoomId = null;
+    let mediaState = {
+      isMuted: false,
+      isVideoOff: false,
+      isScreenSharing: false
+    };
+
+    function log(msg, type = "info") {
+      const consoleEl = document.getElementById("logConsole");
+      const time = new Date().toLocaleTimeString();
+
+      let text = msg;
+      if (typeof msg === 'object') {
+        text = JSON.stringify(msg, null, 2);
       }
 
-      function connect() {
-        const token = document.getElementById("token").value;
+      const entry = document.createElement("div");
+      entry.className = `log-entry ${type}`;
+      entry.innerHTML = `<span class="time">[${time}]</span>${text}`;
+      consoleEl.appendChild(entry);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
 
-        socket = io("http://localhost:3001", {
-          auth: { token },
-        });
+    function updateStatus(connected) {
+      const badge = document.getElementById("statusBadge");
+      const text = document.getElementById("statusText");
+      const btnConnect = document.getElementById("btnConnect");
+      const btnDisconnect = document.getElementById("btnDisconnect");
 
-        socket.on("connect", () => {
-          log("✅ Conectado: " + socket.id);
-        });
+      if (connected) {
+        badge.className = "status-badge connected";
+        text.textContent = "Conectado";
+        btnConnect.style.display = "none";
+        btnDisconnect.style.display = "flex";
+      } else {
+        badge.className = "status-badge";
+        text.textContent = "Desconectado";
+        btnConnect.style.display = "flex";
+        btnDisconnect.style.display = "none";
 
-        socket.on("disconnect", (reason) => {
-          log("❌ Desconectado: " + reason);
-        });
+        // Reset lists and room
+        document.getElementById("onlineUsersList").innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding-top: 1rem;">Sin conexión</div>';
+        document.getElementById("roomUsersList").innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding-top: 1rem;">No hay sala activa</div>';
+        document.getElementById("chatHistory").innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 5rem; font-size: 0.9rem;">Únete a una sala para ver los mensajes.</div>';
+        document.getElementById("countOnlineUsers").textContent = "0";
+        document.getElementById("countRoomUsers").textContent = "0";
+        document.getElementById("activeRoomLabel").textContent = "";
+        activeRoomId = null;
+      }
+    }
 
-        socket.on("connect_error", (err) => {
-          log("🚫 Error: " + err.message);
-        });
+    function connect() {
+      const serverUrl = document.getElementById("serverUrl").value.trim();
+      const token = document.getElementById("token").value.trim();
+      // Store token globally for later API calls
+      window.authToken = token;
 
-        socket.on("pong", () => {
-          log("🏓 Pong recibido del servidor");
-        });
+      if (!token) {
+        log("⚠️ Advertencia: Intento de conexión sin Firebase Token. El middleware podría rechazarla.", "warning");
       }
 
-      function sendPing() {
-        if (socket) {
-          socket.emit("ping");
-          log("🏓 Ping enviado");
-        }
+      log(`Intentando conectar a ${serverUrl}...`, "info");
+
+      if (socket) {
+        socket.disconnect();
       }
-    </script>
-  </body>
+
+      socket = io(serverUrl, {
+        auth: { token }
+      });
+
+      socket.on("connect", () => {
+        log(`✅ Socket conectado con ID: ${socket.id}`, "success");
+        updateStatus(true);
+      });
+
+      socket.on("disconnect", (reason) => {
+        log(`❌ Socket desconectado. Razón: ${reason}`, "danger");
+        updateStatus(false);
+      });
+
+      socket.on("connect_error", (err) => {
+        log(`🚫 Error de conexión: ${err.message}`, "danger");
+        updateStatus(false);
+      });
+
+      socket.on("pong", () => {
+        log("🏓 Pong recibido del servidor", "ping");
+      });
+
+      socket.on("errorMessage", (payload) => {
+        log(`⚠️ Error del servidor: [${payload.code}] ${payload.message}`, "warning");
+      });
+
+      // Listen for user presence
+      socket.on("usersOnline", (users) => {
+        log({ event: "usersOnline", count: users.length, users }, "info");
+        updateOnlineUsers(users);
+      });
+
+      socket.on("roomUsers", (users) => {
+        log({ event: "roomUsers", count: users.length, users }, "info");
+        updateRoomUsers(users);
+      });
+
+      socket.on("userJoined", (user) => {
+        log(`👋 Usuario unido al canal (Socket ID: ${user.socketId})`, "success");
+      });
+
+      socket.on("userLeft", (payload) => {
+        log(`🚶 Usuario salió: ${payload.socketId} de la sala ${payload.roomId}`, "warning");
+      });
+
+      // Listen for messages
+      socket.on("message:new", (msg) => {
+        log({ event: "message:new", msg }, "success");
+        appendMessage(msg);
+      });
+
+      socket.on("message:error", (payload) => {
+        log(`⚠️ message:error: [${payload.code}] ${payload.message}`, "danger");
+      });
+
+      // WebRTC & Media events
+      socket.on("media:status", (user) => {
+        log({ event: "media:status", user }, "info");
+      });
+
+      socket.on("webrtc:offer", (payload) => {
+        log({ event: "webrtc:offer", from: payload.fromSocketId }, "info");
+      });
+
+      socket.on("webrtc:answer", (payload) => {
+        log({ event: "webrtc:answer", from: payload.fromSocketId }, "info");
+      });
+
+      socket.on("webrtc:ice-candidate", (payload) => {
+        log({ event: "webrtc:ice-candidate", from: payload.fromSocketId }, "info");
+      });
+    }
+
+    function disconnect() {
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+      }
+    }
+
+    function sendPing() {
+      if (!socket) return log("❌ Error: Socket no conectado", "danger");
+      socket.emit("ping");
+      log("🏓 Ping enviado", "ping");
+    }
+
+    function setUsername() {
+      if (!socket) return log("❌ Error: Socket no conectado", "danger");
+      socket.emit("newUser");
+      log("Enviado newUser (resuelto en backend por el token)", "info");
+    }
+
+    function joinRoom() {
+      if (!socket) return log("❌ Error: Socket no conectado", "danger");
+      const roomId = document.getElementById("roomId").value.trim();
+      if (!roomId) return log("⚠️ Room ID es requerido", "warning");
+
+      activeRoomId = roomId;
+      document.getElementById("activeRoomLabel").textContent = `(${roomId})`;
+
+      const payload = { roomId };
+      socket.emit("joinRoom", payload);
+      log({ emit: "joinRoom", payload }, "info");
+
+      // Limpiar chat local esperando nuevos eventos
+      document.getElementById("chatHistory").innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 5rem; font-size: 0.9rem;">Unido a sala: ' + roomId + '. Pidiendo historial...</div>';
+
+      // Auto-request history
+      setTimeout(() => {
+        requestHistory();
+      }, 300);
+    }
+
+    function leaveRoom() {
+      if (!socket) return log("❌ Error: Socket no conectado", "danger");
+      if (!activeRoomId) return log("⚠️ No estás en ninguna sala actualmente", "warning");
+
+      socket.emit("leaveRoom", activeRoomId);
+      log(`Enviado leaveRoom para la sala: ${activeRoomId}`, "info");
+
+      activeRoomId = null;
+      document.getElementById("activeRoomLabel").textContent = "";
+      document.getElementById("roomUsersList").innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding-top: 1rem;">No hay sala activa</div>';
+      document.getElementById("chatHistory").innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 5rem; font-size: 0.9rem;">Únete a una sala para ver los mensajes.</div>';
+      document.getElementById("countRoomUsers").textContent = "0";
+    }
+
+    function requestHistory() {
+      const rId = activeRoomId || document.getElementById("roomId").value.trim();
+      if (!rId) return log("⚠️ Indica un Room ID para pedir historial", "warning");
+
+      const realtimeUrl = document.getElementById("serverUrl").value.trim();
+      let apiBaseUrl = realtimeUrl;
+      const portMatch = realtimeUrl.match(/:(\d+)(\/|$)/);
+      if (portMatch) {
+        apiBaseUrl = realtimeUrl.replace(/:(\d+)(\/|$)/, ":3003$2");
+      } else {
+        apiBaseUrl = realtimeUrl.replace(/\/$/, "") + ":3003";
+      }
+
+      const fetchOptions = { method: "GET" };
+      if (window.authToken) {
+        fetchOptions.headers = { "Authorization": `Bearer ${window.authToken}` };
+      }
+
+      fetch(`${apiBaseUrl}/api/rooms/${rId}/messages`, fetchOptions)
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const ct = res.headers.get("content-type") || "";
+          if (!ct.includes("application/json")) {
+            return res.text().then(txt => { throw new Error("Non-JSON response: " + txt.slice(0, 200)); });
+          }
+          return res.json();
+        })
+        .then(data => {
+          log({ event: "chatHistory", count: data.messages?.length ?? 0 }, "info");
+          displayChatHistory(data.messages || []);
+        })
+        .catch(err => log(`⚠️ Error al obtener historial: ${err}`, "danger"));
+    }
+
+
+
+    function sendChatMessage() {
+      if (!socket) return log("❌ Error: Socket no conectado", "danger");
+      const msgInput = document.getElementById("chatMessage");
+      const msgText = msgInput.value.trim();
+      if (!msgText) return;
+
+      const payload = {
+        text: msgText
+      };
+
+      socket.emit("message:send", payload);
+      log({ emit: "message:send", payload }, "info");
+      msgInput.value = "";
+    }
+
+    function handleChatKeyPress(event) {
+      if (event.key === "Enter") {
+        sendChatMessage();
+      }
+    }
+
+    function toggleMedia(type) {
+      if (!socket) return log("❌ Error: Socket no conectado", "danger");
+      const rId = activeRoomId || document.getElementById("roomId").value.trim();
+      if (!rId) return log("⚠️ Debes estar en una sala para reportar estado multimedia", "warning");
+
+      const btnMute = document.getElementById("btnMute");
+      const btnVideo = document.getElementById("btnVideo");
+      const btnScreen = document.getElementById("btnScreen");
+
+      if (type === 'mute') {
+        mediaState.isMuted = !mediaState.isMuted;
+        btnMute.className = `media-btn ${mediaState.isMuted ? 'active muted' : ''}`;
+        btnMute.textContent = mediaState.isMuted ? '🎙️ Silenciado' : '🎙️ Mic Activo';
+      } else if (type === 'video') {
+        mediaState.isVideoOff = !mediaState.isVideoOff;
+        btnVideo.className = `media-btn ${mediaState.isVideoOff ? 'active muted' : ''}`;
+        btnVideo.textContent = mediaState.isVideoOff ? '📷 Video Apagado' : '📷 Video Activo';
+      } else if (type === 'screen') {
+        mediaState.isScreenSharing = !mediaState.isScreenSharing;
+        btnScreen.className = `media-btn ${mediaState.isScreenSharing ? 'active' : ''}`;
+        btnScreen.textContent = mediaState.isScreenSharing ? '🖥️ Compartiendo' : '🖥️ Compartir Pantalla';
+      }
+
+      const payload = {
+        roomId: rId,
+        ...mediaState
+      };
+
+      socket.emit("media:status", payload);
+      log({ emit: "media:status", payload }, "info");
+    }
+
+    function clearLogs() {
+      document.getElementById("logConsole").innerHTML = "";
+    }
+
+    // DOM Updates helpers
+    function updateOnlineUsers(users) {
+      const container = document.getElementById("onlineUsersList");
+      document.getElementById("countOnlineUsers").textContent = users.length;
+
+      if (users.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding-top: 1rem;">Nadie conectado</div>';
+        return;
+      }
+
+      container.innerHTML = users.map(u => {
+        const isMe = socket && u.socketId === socket.id;
+        return `
+            <div class="user-item">
+              <span style="font-weight: 500; font-family: var(--font-mono);">${u.socketId.substring(0, 6)}</span>
+              <div class="user-badges">
+                ${isMe ? '<span class="badge self">Tú</span>' : ''}
+              </div>
+            </div>
+          `;
+      }).join('');
+    }
+
+    function updateRoomUsers(users) {
+      const container = document.getElementById("roomUsersList");
+      document.getElementById("countRoomUsers").textContent = users.length;
+
+      if (users.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding-top: 1rem;">Sala vacía</div>';
+        return;
+      }
+
+      container.innerHTML = users.map(u => {
+        const isMe = socket && u.socketId === socket.id;
+        return `
+            <div class="user-item">
+              <span style="font-family: var(--font-mono);">${u.socketId.substring(0, 6)}</span>
+              <div class="user-badges">
+                ${isMe ? '<span class="badge self">Tú</span>' : ''}
+                ${u.isMuted ? '<span class="badge mic">Mute</span>' : ''}
+                ${u.isVideoOff ? '<span class="badge video">CamOff</span>' : ''}
+                ${u.isScreenSharing ? '<span class="badge screen">Screen</span>' : ''}
+              </div>
+            </div>
+          `;
+      }).join('');
+    }
+
+    function displayChatHistory(messages) {
+      const container = document.getElementById("chatHistory");
+      if (messages.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 5rem; font-size: 0.9rem;">No hay mensajes en esta sala aún.</div>';
+        return;
+      }
+      container.innerHTML = "";
+      messages.forEach(m => appendMessage(m, false));
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendMessage(msg, scroll = true) {
+      const container = document.getElementById("chatHistory");
+
+      // Remove empty placeholder if any
+      if (container.querySelector('div[style*="text-align: center"]')) {
+        container.innerHTML = "";
+      }
+
+      const textContent = msg.text || msg.message || "";
+      const senderUid = msg.uid || msg.senderId || "";
+      const isMe = socket && (senderUid === socket.id || (socket.data && senderUid === socket.data.uid));
+
+      const msgEl = document.createElement("div");
+      msgEl.className = `chat-msg ${isMe ? 'self' : ''}`;
+
+      const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
+
+      msgEl.innerHTML = `
+          <div class="chat-msg-header">
+            <span class="name">${msg.username || 'Anónimo'}</span>
+            <span class="time">${time}</span>
+          </div>
+          <div class="chat-msg-bubble">
+            ${escapeHTML(textContent)}
+          </div>
+        `;
+
+      container.appendChild(msgEl);
+      if (scroll) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g,
+        tag => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          "'": '&#39;',
+          '"': '&quot;'
+        }[tag] || tag)
+      );
+    }
+  </script>
+</body>
+
 </html>

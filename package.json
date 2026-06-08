@@ -1,12 +1,14 @@
 {
   "name": "backend-realtime",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Servidor realtime con Socket.IO para salas de estudio colaborativo.",
+  "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js"
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck"
   },
   "repository": {
     "type": "git",
@@ -15,7 +17,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/studeo-app/backend-realtime/issues"
   },
@@ -28,9 +30,10 @@
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.1",
-    "ts-node-dev": "^2.0.0",
+    "tsx": "^4.22.3",
     "typescript": "^6.0.3"
   }
 }
