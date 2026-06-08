@@ -5,7 +5,6 @@ export interface UserPresence {
   isMuted: boolean;
   isVideoOff: boolean;
   isScreenSharing: boolean;
-  // GUARDA EL URL DEL AVATAR
 }
 
 
@@ -65,10 +64,16 @@ export interface MessageNewPayload {
   timestamp: string;
 }
 
+export interface RoomUsersPrevisualizationPayload {
+  roomId: string;
+  socketId: string;
+}
+
 export interface ClientToServerEvents {
   newUser: () => void;
   joinRoom: (payload: JoinRoomPayload) => void;
   leaveRoom: (roomId?: string) => void;
+  roomUsersPrevisualization: (payload: RoomUsersPrevisualizationPayload) => void;
   "message:send": (payload: MessageSendPayload) => void;
   "media:status": (payload: MediaStatusPayload) => void;
   "webrtc:offer": (payload: WebRtcOfferPayload) => void;
