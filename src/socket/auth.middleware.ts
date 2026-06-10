@@ -8,6 +8,7 @@ export interface AuthenticatedSocket extends Socket {
     email?: string;
     username?: string;
     name?: string;
+    avatarUrl?: string;
   };
 }
 
@@ -47,10 +48,14 @@ export async function authSocketMiddleware(
           username?: string;
           firstName?: string;
           lastName?: string;
+          avatarUrl?: string;
         };
         if (profileData && profileData.username) {
           socket.data.username = profileData.username;
           socket.data.name = `${profileData.firstName} ${profileData.lastName}`;
+          if (profileData.avatarUrl) {
+            socket.data.avatarUrl = profileData.avatarUrl;
+          }
         }
       } else {
         console.warn(`Error al obtener perfil básico desde backend: ${response.status} ${response.statusText}`);
