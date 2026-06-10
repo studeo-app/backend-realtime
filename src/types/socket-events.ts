@@ -1,6 +1,9 @@
 export interface UserPresence {
   socketId: string;
   uid: string | null;
+  username: string | null;
+  name: string | null;
+  avatarUrl: string | null;
   roomId: string | null;
   isMuted: boolean;
   isVideoOff: boolean;
