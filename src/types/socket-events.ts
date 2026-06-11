@@ -10,6 +10,10 @@ export interface UserPresence {
   isScreenSharing: boolean;
 }
 
+export interface RoomPresence {
+  ownerUid: string;
+  countUsers: number;
+}
 
 export type SessionDescriptionPayload = Record<string, unknown>;
 export type IceCandidateData = Record<string, unknown>;
@@ -72,11 +76,16 @@ export interface RoomUsersPrevisualizationPayload {
   socketId: string;
 }
 
+export interface DeleteRoomPayload {
+  roomId: string;
+}
+
 export interface ClientToServerEvents {
   newUser: () => void;
   joinRoom: (payload: JoinRoomPayload) => void;
   leaveRoom: (roomId?: string) => void;
   roomUsersPrevisualization: (payload: RoomUsersPrevisualizationPayload) => void;
+  deleteRoom: (payload: DeleteRoomPayload) => void;
   "message:send": (payload: MessageSendPayload) => void;
   "media:status": (payload: MediaStatusPayload) => void;
   "webrtc:offer": (payload: WebRtcOfferPayload) => void;
@@ -90,6 +99,7 @@ export interface ServerToClientEvents {
   roomUsers: (users: UserPresence[]) => void;
   userJoined: (user: UserPresence) => void;
   userLeft: (payload: { socketId: string; roomId: string | null }) => void;
+  disconnectUser: (payload: DeleteRoomPayload) => void;
   "message:new": (message: MessageNewPayload) => void;
   "message:error": (payload: { code: string; message: string }) => void;
   errorMessage: (payload: { code: string; message: string }) => void;

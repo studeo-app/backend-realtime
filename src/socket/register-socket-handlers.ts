@@ -4,8 +4,12 @@ import {
   getUsersByRoom,
   getUsersOnline,
   isUidInRoom,
+  isUidRoomOwner,
+  removeRoom,
   removeUser,
-  upsertUser
+  upsertRoom,
+  upsertUser,
+  userLeftRoom
 } from "./in-memory-store.js";
 import { logger } from "../utils/logger.js";
 import type {
@@ -34,6 +38,15 @@ const emitRoomUsersToSocket = (socket: TypedSocket, roomId: string): void => {
   socket.emit("roomUsers", getUsersByRoom(roomId));
 };
 
+const deleteRoom = (io: SocketServer, roomId: string): void => {
+  const users = getUsersByRoom(roomId);
+  users.forEach((user) => {
+    removeUser(user.socketId);
+    io.to(user.socketId).emit("disconnectUser", { roomId });
+  });
+  removeRoom(roomId);
+};
+
 /**
  * Removes a socket from a room:
  * - Leaves the Socket.IO room
@@ -57,7 +70,7 @@ const safeLeaveRoom = (socket: TypedSocket, roomId?: string): string | undefined
   });
 
   socket.leave(roomToLeave);
-  upsertUser(socket.id, { roomId: null });
+  userLeftRoom(roomToLeave, socket.id);
   socket.to(roomToLeave).emit("userLeft", { socketId: socket.id, roomId: roomToLeave });
 
   // ── Log AFTER ──────────────────────────────────────────────────────────
@@ -88,6 +101,15 @@ const handleJoinRoom = async (
     socket.emit("errorMessage", { code: "ROOM_NOT_FOUND", message: "La sala no existe." });
     return;
   }
+
+  // ── Verify room is not closed (owner exists) ─────────────────────────────
+  const ownerUid = await ChatService.getRoomOwner(roomId);
+  if (!ownerUid) {
+    socket.emit("errorMessage", { code: "ROOM_NOT_FOUND", message: "La sala no existe o ya fue cerrada." });
+    return;
+  }
+
+  upsertRoom(roomId, ownerUid);
 
   // ── Duplicate join guard: same uid already in this exact room ─────────────
   const uid = socket.data.uid;
@@ -222,6 +244,21 @@ export const registerSocketHandlers = (io: SocketServer): void => {
       if (leftRoom) {
         emitRoomUsers(io, leftRoom);
       }
+    });
+
+    socket.on("deleteRoom", (payload) => {
+      const roomId = payload.roomId?.trim();
+      if (!roomId) {
+        socket.emit("errorMessage", { code: "INVALID_ROOM", message: "roomId es obligatorio." });
+        return;
+      }
+
+      if (!isUidRoomOwner(socket.data.uid, roomId)) {
+        socket.emit("errorMessage", { code: "NOT_ROOM_OWNER", message: "No tienes permiso para eliminar la sala." });
+        return;
+      }
+
+      deleteRoom(io, roomId);
     });
 
     socket.on("roomUsersPrevisualization", (payload) => {
