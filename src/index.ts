@@ -34,6 +34,7 @@ httpServer.listen(PORT, () => {
   console.log("Studeo Realtime Backend");
   console.log(`Servidor corriendo en puerto ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`Docs:         http://localhost:${PORT}/docs`);
   console.log("Socket.io listo para conexiones");
   console.log("═══════════════════════════════════════════");
   console.log("");
