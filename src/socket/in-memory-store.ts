@@ -1,7 +1,6 @@
-import type { RoomPresence, UserPresence } from "../types/socket-events.js";
+import type { UserPresence } from "../types/socket-events.js";
 
 const usersBySocketId = new Map<string, UserPresence>();
-const rooms = new Map<string, { ownerUid: string }>();
 
 export const upsertUser = (socketId: string, data?: Partial<UserPresence>): UserPresence => {
   const previous = usersBySocketId.get(socketId);
@@ -27,33 +26,10 @@ export const upsertUser = (socketId: string, data?: Partial<UserPresence>): User
   return nextValue;
 };
 
-export const upsertRoom = (roomId: string, ownerUid: string): void => {
-  rooms.set(roomId, { ownerUid });
-};
-
 export const removeUser = (socketId: string): UserPresence | undefined => {
   const existing = usersBySocketId.get(socketId);
   usersBySocketId.delete(socketId);
-  if (existing?.roomId) {
-    if (getUsersByRoom(existing.roomId).length === 0) {
-      rooms.delete(existing.roomId);
-    }
-  }
   return existing;
-};
-
-export const removeRoom = (roomId: string): void => {
-  rooms.delete(roomId);
-};
-
-export const userLeftRoom = (roomId: string, socketId: string): void => {
-  const user = usersBySocketId.get(socketId);
-  if (user && user.roomId === roomId) {
-    upsertUser(socketId, { roomId: null });
-  }
-  if (getUsersByRoom(roomId).length === 0) {
-    rooms.delete(roomId);
-  }
 };
 
 export const getUser = (socketId: string): UserPresence | undefined => usersBySocketId.get(socketId);
@@ -93,8 +69,3 @@ export const isUidInRoom = (uid: string, roomId: string, excludeSocketId: string
   getUsersByRoom(roomId).some(
     (user) => user.uid === uid && user.socketId !== excludeSocketId
   );
-
-export const isUidRoomOwner = (uid: string | undefined, roomId: string): boolean =>
-  getRoomOwnerUid(roomId) === uid;
-;
-
