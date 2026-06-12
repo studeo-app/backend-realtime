@@ -26,6 +26,25 @@ export class ChatService {
   }
 
   /**
+   * Obtiene el dueño de una sala.
+   * @param roomId El ID de la sala.
+   * @returns Una promesa que resuelve al ID del dueño de la sala.
+   */
+  static async getRoomOwner(roomId: string): Promise<string | null> {
+    try {
+      const db = getFirestore();
+      const doc = await db.collection("rooms").doc(roomId).get();
+      if (!doc.exists) {
+        throw new Error(`La sala ${roomId} no existe.`);
+      }
+      return doc.data()?.ownerUid;
+    } catch (error) {
+      console.error(`[Firestore Error] Failed to get room owner for room ${roomId}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Persists a chat message in the Firestore collection rooms/{roomId}/messages.
    * Firestore auto-generates the document ID via .add().
    * @param roomId The room ID where the message belongs.
