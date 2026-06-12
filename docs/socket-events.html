@@ -570,6 +570,44 @@ socket.emit(<span class="hlstring">"leaveRoom"</span>, <span class="hlstring">"a
           </div>
         </div>
 
+        <!-- deleteRoom -->
+        <div class="event-card" id="deleteRoom">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">deleteRoom</span>
+            <span class="event-summary">Notificar eliminacion de una sala</span>
+            <span class="chevron">â–¼</span>
+          </div>
+          <div class="event-body">
+            <p>Debe emitirlo el propietario conectado a la sala cuando la sala se elimina por REST. El servidor valida el owner con la presencia interna de la sala y, si Firestore aun existe, con <code>rooms/{roomId}.ownerUid</code>. Luego notifica a todos los sockets de la sala, los saca del room de Socket.IO y deja su <code>roomId</code> en <code>null</code>.</p>
+            <div class="sub-title">Payload</div>
+            <pre>socket.emit(<span class="hlstring">"deleteRoom"</span>, {
+  roomId: <span class="hlstring">"abc123"</span>  <span class="hlcomment">// requerido</span>
+});</pre>
+            <div class="sub-title">Campos</div>
+            <table>
+              <tr><th>Campo</th><th>Tipo</th><th>Â¿Req?</th><th>DescripciÃ³n</th></tr>
+              <tr><td><code>roomId</code></td><td><code>string</code></td><td><span class="req">âœ…</span></td><td>ID de la sala eliminada.</td></tr>
+            </table>
+            <div class="sub-title">Emite en exito</div>
+            <div class="emits-item">
+              <span class="emits-code">roomDeleted</span>
+              <span class="emits-desc">{ roomId, deletedBy, reason } a todos los sockets conectados a la sala.</span>
+            </div>
+            <div class="emits-item">
+              <span class="emits-code">usersOnline</span>
+              <span class="emits-desc">Lista actualizada con roomId null para quienes estaban en la sala.</span>
+            </div>
+            <div class="sub-title">Errores posibles</div>
+            <div class="error-list">
+              <div class="error-item"><span class="error-code">INVALID_ROOM</span><span class="error-desc">roomId vacio o ausente.</span></div>
+              <div class="error-item"><span class="error-code">UNAUTHORIZED</span><span class="error-desc">El socket no tiene uid autenticado.</span></div>
+              <div class="error-item"><span class="error-code">NOT_IN_ROOM</span><span class="error-desc">El socket emisor no esta conectado a esa sala.</span></div>
+              <div class="error-item"><span class="error-code">ROOM_NOT_FOUND</span><span class="error-desc">No existe presencia owner ni documento Firestore para validar.</span></div>
+              <div class="error-item"><span class="error-code">FORBIDDEN</span><span class="error-desc">El uid emisor no es el propietario de la sala.</span></div>
+            </div>
+          </div>
+        </div>
+
         <!-- message:send -->
         <div class="event-card" id="messageSend">
           <div class="event-header" onclick="toggle(this)">
@@ -683,6 +721,7 @@ socket.on(<span class="hlstring">"pong"</span>, () => console.log(<span class="h
           <tr><td><code>roomUsers</code></td><td><code>UserPresence[]</code></td><td>joinRoom / leaveRoom / disconnect</td><td>Miembros de la sala</td></tr>
           <tr><td><code>userJoined</code></td><td><code>UserPresence</code></td><td>Nuevo miembro entra a la sala</td><td>Otros miembros</td></tr>
           <tr><td><code>userLeft</code></td><td><code>{ socketId, roomId }</code></td><td>leaveRoom o disconnect</td><td>Otros miembros</td></tr>
+          <tr><td><code>roomDeleted</code></td><td><code>{ roomId, deletedBy, reason }</code></td><td>deleteRoom validado</td><td>Todos en la sala eliminada</td></tr>
           <tr><td><code>message:new</code></td><td><code>{ uid, username, text, timestamp }</code></td><td>message:send exitoso</td><td>Todos en la sala (incluye emisor)</td></tr>
           <tr><td><code>message:error</code></td><td><code>{ code, message }</code></td><td>Error en message:send</td><td>El socket emisor</td></tr>
           <tr><td><code>errorMessage</code></td><td><code>{ code, message }</code></td><td>Error general (joinRoom, media…)</td><td>El socket emisor</td></tr>
@@ -707,6 +746,7 @@ socket.on(<span class="hlstring">"pong"</span>, () => console.log(<span class="h
   socketId:       <span class="hltype">string</span>;        <span class="hlcomment">// ID único del socket (ephemeral)</span>
   uid:            <span class="hltype">string | null</span>; <span class="hlcomment">// Firebase UID del usuario</span>
   roomId:         <span class="hltype">string | null</span>; <span class="hlcomment">// null si no está en ninguna sala</span>
+  roomOwnerUid:   <span class="hltype">string | null</span>; <span class="hlcomment">// owner de la sala activa, usado para validar deleteRoom</span>
   isMuted:        <span class="hltype">boolean</span>;
   isVideoOff:     <span class="hltype">boolean</span>;
   isScreenSharing:<span class="hltype">boolean</span>;
