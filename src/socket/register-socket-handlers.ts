@@ -293,6 +293,25 @@ export const registerSocketHandlers = (io: SocketServer): void => {
       }
     });
 
+    socket.on("roomMemberRemoved", (payload) => {
+      const roomId = payload.roomId?.trim();
+      if (!roomId) {
+        socket.emit("errorMessage", { code: "INVALID_ROOM", message: "roomId es obligatorio." });
+        return;
+      }
+
+      if (!uid) {
+        socket.emit("errorMessage", { code: "UNAUTHORIZED", message: "Usuario no autenticado." });
+        return;
+      }
+
+      io.to(roomId).emit("roomMemberRemoved", { roomId, uid });
+      const leftRoom = safeLeaveRoom(socket, roomId);
+      if (leftRoom) {
+        emitRoomUsers(io, leftRoom);
+      }
+    });
+
     socket.on("roomUsersPrevisualization", (payload) => {
       const roomId = payload.roomId?.trim();
       if (!roomId) {
