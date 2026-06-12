@@ -4,8 +4,12 @@ import {
   getUsersByRoom,
   getUsersOnline,
   isUidInRoom,
+  isUidRoomOwner,
+  removeRoom,
   removeUser,
-  upsertUser
+  upsertRoom,
+  upsertUser,
+  userLeftRoom
 } from "./in-memory-store.js";
 import { logger } from "../utils/logger.js";
 import type {
@@ -28,6 +32,19 @@ const emitUsersOnline = (io: SocketServer): void => {
 
 const emitRoomUsers = (io: SocketServer, roomId: string): void => {
   io.to(roomId).emit("roomUsers", getUsersByRoom(roomId));
+};
+
+const emitRoomUsersToSocket = (socket: TypedSocket, roomId: string): void => {
+  socket.emit("roomUsers", getUsersByRoom(roomId));
+};
+
+const deleteRoom = (io: SocketServer, roomId: string): void => {
+  const users = getUsersByRoom(roomId);
+  users.forEach((user) => {
+    removeUser(user.socketId);
+    io.to(user.socketId).emit("disconnectUser", { roomId });
+  });
+  removeRoom(roomId);
 };
 
 /**
@@ -53,7 +70,7 @@ const safeLeaveRoom = (socket: TypedSocket, roomId?: string): string | undefined
   });
 
   socket.leave(roomToLeave);
-  upsertUser(socket.id, { roomId: null });
+  userLeftRoom(roomToLeave, socket.id);
   socket.to(roomToLeave).emit("userLeft", { socketId: socket.id, roomId: roomToLeave });
 
   // ── Log AFTER ──────────────────────────────────────────────────────────
@@ -84,6 +101,15 @@ const handleJoinRoom = async (
     socket.emit("errorMessage", { code: "ROOM_NOT_FOUND", message: "La sala no existe." });
     return;
   }
+
+  // ── Verify room is not closed (owner exists) ─────────────────────────────
+  const ownerUid = await ChatService.getRoomOwner(roomId);
+  if (!ownerUid) {
+    socket.emit("errorMessage", { code: "ROOM_NOT_FOUND", message: "La sala no existe o ya fue cerrada." });
+    return;
+  }
+
+  upsertRoom(roomId, ownerUid);
 
   // ── Duplicate join guard: same uid already in this exact room ─────────────
   const uid = socket.data.uid;
@@ -118,6 +144,8 @@ const handleJoinRoom = async (
     roomId,
     usersInRoom: getUsersByRoom(roomId).map((u) => ({ socketId: u.socketId, uid: u.uid }))
   });
+
+  console.log("Sala", getUsersByRoom(roomId));
 };
 
 const handleMessageSend = async (
@@ -185,7 +213,12 @@ export const registerSocketHandlers = (io: SocketServer): void => {
     const uid = socket.data.uid;
 
     // Persist uid in presence from the moment of connection
-    upsertUser(socket.id, { uid: uid ?? null });
+    upsertUser(socket.id, {
+      uid: uid ?? null,
+      username: socket.data.username ?? null,
+      name: socket.data.name ?? null,
+      avatarUrl: socket.data.avatarUrl ?? null,
+    });
 
     logger.info("Cliente conectado", {
       socketId: socket.id,
@@ -194,8 +227,14 @@ export const registerSocketHandlers = (io: SocketServer): void => {
     });
 
     socket.on("newUser", () => {
-      upsertUser(socket.id, { uid: uid ?? null });
+      upsertUser(socket.id, {
+        uid: uid ?? null,
+        username: socket.data.username ?? null,
+        name: socket.data.name ?? null,
+        avatarUrl: socket.data.avatarUrl ?? null,
+      });
       emitUsersOnline(io);
+      console.log("Usuario nuevo:", getUser(socket.id));
     });
 
     socket.on("joinRoom", (payload) => handleJoinRoom(io, socket, payload));
@@ -206,6 +245,30 @@ export const registerSocketHandlers = (io: SocketServer): void => {
         emitRoomUsers(io, leftRoom);
       }
     });
+
+    socket.on("deleteRoom", (payload) => {
+      const roomId = payload.roomId?.trim();
+      if (!roomId) {
+        socket.emit("errorMessage", { code: "INVALID_ROOM", message: "roomId es obligatorio." });
+        return;
+      }
+
+      if (!isUidRoomOwner(socket.data.uid, roomId)) {
+        socket.emit("errorMessage", { code: "NOT_ROOM_OWNER", message: "No tienes permiso para eliminar la sala." });
+        return;
+      }
+
+      deleteRoom(io, roomId);
+    });
+
+    socket.on("roomUsersPrevisualization", (payload) => {
+      const roomId = payload.roomId?.trim();
+      if (!roomId) {
+        socket.emit("errorMessage", { code: "INVALID_ROOM", message: "roomId es obligatorio." });
+        return;
+      }
+      emitRoomUsersToSocket(socket, roomId);
+    })
 
     socket.on("message:send", (payload) => handleMessageSend(io, socket, payload));
 

@@ -3,7 +3,6 @@ import { getFirestore } from "../config/firebase.config.js";
 export interface ChatMessage {
   uid: string;
   username: string;
-  avatarUrl?: string | null;
   text: string;
   timestamp: string;
 }
@@ -25,6 +24,25 @@ export class ChatService {
     } catch (error) {
       console.error(`Error verifying room ${roomId} existence in Firestore:`, error);
       return false;
+    }
+  }
+
+  /**
+   * Obtiene el dueño de una sala.
+   * @param roomId El ID de la sala.
+   * @returns Una promesa que resuelve al ID del dueño de la sala.
+   */
+  static async getRoomOwner(roomId: string): Promise<string | null> {
+    try {
+      const db = getFirestore();
+      const doc = await db.collection("rooms").doc(roomId).get();
+      if (!doc.exists) {
+        throw new Error(`La sala ${roomId} no existe.`);
+      }
+      return doc.data()?.ownerUid;
+    } catch (error) {
+      console.error(`[Firestore Error] Failed to get room owner for room ${roomId}:`, error);
+      return null;
     }
   }
 

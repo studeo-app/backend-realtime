@@ -1,12 +1,19 @@
 export interface UserPresence {
   socketId: string;
   uid: string | null;
+  username: string | null;
+  name: string | null;
+  avatarUrl: string | null;
   roomId: string | null;
   isMuted: boolean;
   isVideoOff: boolean;
   isScreenSharing: boolean;
 }
 
+export interface RoomPresence {
+  ownerUid: string;
+  countUsers: number;
+}
 
 export type SessionDescriptionPayload = Record<string, unknown>;
 export type IceCandidateData = Record<string, unknown>;
@@ -64,10 +71,21 @@ export interface MessageNewPayload {
   timestamp: string;
 }
 
+export interface RoomUsersPrevisualizationPayload {
+  roomId: string;
+  socketId: string;
+}
+
+export interface DeleteRoomPayload {
+  roomId: string;
+}
+
 export interface ClientToServerEvents {
   newUser: () => void;
   joinRoom: (payload: JoinRoomPayload) => void;
   leaveRoom: (roomId?: string) => void;
+  roomUsersPrevisualization: (payload: RoomUsersPrevisualizationPayload) => void;
+  deleteRoom: (payload: DeleteRoomPayload) => void;
   "message:send": (payload: MessageSendPayload) => void;
   "media:status": (payload: MediaStatusPayload) => void;
   "webrtc:offer": (payload: WebRtcOfferPayload) => void;
@@ -81,6 +99,7 @@ export interface ServerToClientEvents {
   roomUsers: (users: UserPresence[]) => void;
   userJoined: (user: UserPresence) => void;
   userLeft: (payload: { socketId: string; roomId: string | null }) => void;
+  disconnectUser: (payload: DeleteRoomPayload) => void;
   "message:new": (message: MessageNewPayload) => void;
   "message:error": (payload: { code: string; message: string }) => void;
   errorMessage: (payload: { code: string; message: string }) => void;
@@ -102,3 +121,4 @@ export interface ServerToClientEvents {
   }) => void;
   pong: () => void;
 }
+
