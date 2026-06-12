@@ -1,5 +1,6 @@
 import type { Server, Socket } from "socket.io";
 import {
+  clearRoomPresence,
   getUser,
   getUsersByRoom,
   getUsersOnline,
@@ -10,6 +11,7 @@ import {
 import { logger } from "../utils/logger.js";
 import type {
   ClientToServerEvents,
+  DeleteRoomPayload,
   JoinRoomPayload,
   MediaStatusPayload,
   MessageSendPayload,
@@ -57,7 +59,7 @@ const safeLeaveRoom = (socket: TypedSocket, roomId?: string): string | undefined
   });
 
   socket.leave(roomToLeave);
-  upsertUser(socket.id, { roomId: null });
+  upsertUser(socket.id, { roomId: null, roomOwnerUid: null });
   socket.to(roomToLeave).emit("userLeft", { socketId: socket.id, roomId: roomToLeave });
 
   // ── Log AFTER ──────────────────────────────────────────────────────────
@@ -83,8 +85,8 @@ const handleJoinRoom = async (
   }
 
   // ── Verify room exists in Firestore ──────────────────────────────────────
-  const exists = await ChatService.verifyRoomExists(roomId);
-  if (!exists) {
+  const ownerUid = await ChatService.getRoomOwnerUid(roomId);
+  if (!ownerUid) {
     socket.emit("errorMessage", { code: "ROOM_NOT_FOUND", message: "La sala no existe." });
     return;
   }
@@ -112,7 +114,7 @@ const handleJoinRoom = async (
 
   // ── Join new room ────────────────────────────────────────────────────────
   socket.join(roomId);
-  const updatedUser = upsertUser(socket.id, { roomId, uid: uid ?? null });
+  const updatedUser = upsertUser(socket.id, { roomId, roomOwnerUid: ownerUid, uid: uid ?? null });
   socket.to(roomId).emit("userJoined", updatedUser);
   emitRoomUsers(io, roomId);
 
@@ -168,6 +170,64 @@ const handleMessageSend = async (
   });
 };
 
+const handleDeleteRoom = async (
+  io: SocketServer,
+  socket: AuthenticatedSocket,
+  payload: DeleteRoomPayload
+): Promise<void> => {
+  const roomId = payload.roomId?.trim();
+  if (!roomId) {
+    socket.emit("errorMessage", { code: "INVALID_ROOM", message: "roomId es obligatorio." });
+    return;
+  }
+
+  const uid = socket.data.uid;
+  if (!uid) {
+    socket.emit("errorMessage", { code: "UNAUTHORIZED", message: "Usuario no autenticado." });
+    return;
+  }
+
+  const requesterPresence = getUser(socket.id);
+  if (requesterPresence?.roomId !== roomId) {
+    socket.emit("errorMessage", {
+      code: "NOT_IN_ROOM",
+      message: "Debes estar conectado a la sala para eliminarla."
+    });
+    return;
+  }
+
+  const ownerUid = requesterPresence.roomOwnerUid ?? await ChatService.getRoomOwnerUid(roomId);
+  if (!ownerUid) {
+    socket.emit("errorMessage", { code: "ROOM_NOT_FOUND", message: "La sala no existe." });
+    return;
+  }
+
+  if (ownerUid !== uid) {
+    socket.emit("errorMessage", {
+      code: "FORBIDDEN",
+      message: "Solo el propietario puede eliminar esta sala."
+    });
+    return;
+  }
+
+  const usersInRoom = getUsersByRoom(roomId);
+  logger.info("[deleteRoom] Room deletion broadcast", {
+    roomId,
+    deletedBy: uid,
+    sockets: usersInRoom.map((user) => user.socketId)
+  });
+
+  io.to(roomId).emit("roomDeleted", {
+    roomId,
+    deletedBy: uid,
+    reason: "OWNER_DELETED_ROOM"
+  });
+
+  io.in(roomId).socketsLeave(roomId);
+  clearRoomPresence(roomId);
+  emitUsersOnline(io);
+};
+
 const handleMediaStatus = (io: SocketServer, socket: TypedSocket, payload: MediaStatusPayload): void => {
   const roomId = payload.roomId?.trim();
   if (!roomId) {
@@ -216,6 +276,16 @@ export const registerSocketHandlers = (io: SocketServer): void => {
     });
 
     socket.on("joinRoom", (payload) => handleJoinRoom(io, socket, payload));
+
+    socket.on("deleteRoom", (payload) => {
+      handleDeleteRoom(io, socket, payload).catch((err) => {
+        logger.error("[deleteRoom] Unexpected error", err);
+        socket.emit("errorMessage", {
+          code: "DELETE_ROOM_FAILED",
+          message: "No pudimos notificar la eliminacion de la sala."
+        });
+      });
+    });
 
     socket.on("leaveRoom", (roomId) => {
       const leftRoom = safeLeaveRoom(socket, roomId);

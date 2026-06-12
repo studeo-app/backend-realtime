@@ -11,19 +11,17 @@ export interface ChatMessage {
  * Service to handle message persistence in Firestore for the Realtime server.
  */
 export class ChatService {
-  /**
-   * Verifies if a room exists in the Firestore database.
-   * @param roomId The room ID to check.
-   * @returns A promise that resolves to true if the room exists, false otherwise.
-   */
-  static async verifyRoomExists(roomId: string): Promise<boolean> {
+  static async getRoomOwnerUid(roomId: string): Promise<string | null> {
     try {
       const db = getFirestore();
       const doc = await db.collection("rooms").doc(roomId).get();
-      return doc.exists;
+      if (!doc.exists) return null;
+
+      const ownerUid = doc.data()?.ownerUid;
+      return typeof ownerUid === "string" && ownerUid.trim() ? ownerUid : null;
     } catch (error) {
-      console.error(`Error verifying room ${roomId} existence in Firestore:`, error);
-      return false;
+      console.error(`Error reading owner for room ${roomId} in Firestore:`, error);
+      return null;
     }
   }
 

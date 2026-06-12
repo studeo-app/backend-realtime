@@ -5,6 +5,7 @@ export interface UserPresence {
   name: string | null;
   avatarUrl: string | null;
   roomId: string | null;
+  roomOwnerUid: string | null;
   isMuted: boolean;
   isVideoOff: boolean;
   isScreenSharing: boolean;
@@ -24,6 +25,10 @@ export interface RoomMessage {
 }
 
 export interface JoinRoomPayload {
+  roomId: string;
+}
+
+export interface DeleteRoomPayload {
   roomId: string;
 }
 
@@ -67,6 +72,12 @@ export interface MessageNewPayload {
   timestamp: string;
 }
 
+export interface RoomDeletedPayload {
+  roomId: string;
+  deletedBy: string;
+  reason: "OWNER_DELETED_ROOM";
+}
+
 export interface RoomUsersPrevisualizationPayload {
   roomId: string;
   socketId: string;
@@ -75,6 +86,7 @@ export interface RoomUsersPrevisualizationPayload {
 export interface ClientToServerEvents {
   newUser: () => void;
   joinRoom: (payload: JoinRoomPayload) => void;
+  deleteRoom: (payload: DeleteRoomPayload) => void;
   leaveRoom: (roomId?: string) => void;
   roomUsersPrevisualization: (payload: RoomUsersPrevisualizationPayload) => void;
   "message:send": (payload: MessageSendPayload) => void;
@@ -90,6 +102,7 @@ export interface ServerToClientEvents {
   roomUsers: (users: UserPresence[]) => void;
   userJoined: (user: UserPresence) => void;
   userLeft: (payload: { socketId: string; roomId: string | null }) => void;
+  roomDeleted: (payload: RoomDeletedPayload) => void;
   "message:new": (message: MessageNewPayload) => void;
   "message:error": (payload: { code: string; message: string }) => void;
   errorMessage: (payload: { code: string; message: string }) => void;
