@@ -6,15 +6,20 @@ export const upsertUser = (socketId: string, data?: Partial<UserPresence>): User
   const previous = usersBySocketId.get(socketId);
   const nextValue: UserPresence = {
     socketId,
-    uid: data?.uid ?? previous?.uid ?? null,
-    username: data?.username ?? previous?.username ?? null,
-    name: data?.name ?? previous?.name ?? null,
-    avatarUrl: data?.avatarUrl ?? previous?.avatarUrl ?? null,
-    roomId: data?.roomId ?? previous?.roomId ?? null,
-    roomOwnerUid: data?.roomOwnerUid ?? previous?.roomOwnerUid ?? null,
-    isMuted: data?.isMuted ?? previous?.isMuted ?? false,
-    isVideoOff: data?.isVideoOff ?? previous?.isVideoOff ?? false,
-    isScreenSharing: data?.isScreenSharing ?? previous?.isScreenSharing ?? false
+    uid: data && "uid" in data ? data.uid ?? null : previous?.uid ?? null,
+    username: data && "username" in data ? data.username ?? null : previous?.username ?? null,
+    name: data && "name" in data ? data.name ?? null : previous?.name ?? null,
+    avatarUrl: data && "avatarUrl" in data ? data.avatarUrl ?? null : previous?.avatarUrl ?? null,
+    roomId: data && "roomId" in data ? data.roomId ?? null : previous?.roomId ?? null,
+    roomOwnerUid:
+      data && "roomOwnerUid" in data ? data.roomOwnerUid ?? null : previous?.roomOwnerUid ?? null,
+    isMuted: data && "isMuted" in data ? data.isMuted ?? false : previous?.isMuted ?? false,
+    isVideoOff:
+      data && "isVideoOff" in data ? data.isVideoOff ?? false : previous?.isVideoOff ?? false,
+    isScreenSharing:
+      data && "isScreenSharing" in data
+        ? data.isScreenSharing ?? false
+        : previous?.isScreenSharing ?? false
   };
 
   usersBySocketId.set(socketId, nextValue);
