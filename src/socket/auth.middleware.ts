@@ -36,6 +36,9 @@ export async function authSocketMiddleware(
 
     // Obtener datos del perfil desde el backend principal
     try {
+      console.log("🚀 ~ authSocketMiddleware ~ env.backendUrl:", env.backendUrl)
+      console.log(`${env.backendUrl}/users/profile/basic`)
+      console.log("token", token)
       const response = await fetch(`${env.backendUrl}/users/profile/basic`, {
         method: "GET",
         headers: {
