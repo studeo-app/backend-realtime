@@ -41,7 +41,7 @@ export interface SendMessagePayload {
 }
 
 export interface MediaStatusPayload {
-  roomId: string;
+  roomId?: string;
   isMuted?: boolean;
   isVideoOff?: boolean;
   isScreenSharing?: boolean;

@@ -228,21 +228,17 @@ const handleDeleteRoom = async (
 };
 
 const handleMediaStatus = (io: SocketServer, socket: TypedSocket, payload: MediaStatusPayload): void => {
-  const roomId = payload.roomId?.trim();
-  if (!roomId) {
-    socket.emit("errorMessage", { code: "INVALID_ROOM", message: "roomId es obligatorio." });
-    return;
-  }
-
   const current = getUser(socket.id);
+  const requestedRoomId = payload.roomId?.trim();
   const updatedUser = upsertUser(socket.id, {
-    roomId,
     isMuted: payload.isMuted ?? current?.isMuted ?? false,
     isVideoOff: payload.isVideoOff ?? current?.isVideoOff ?? false,
     isScreenSharing: payload.isScreenSharing ?? current?.isScreenSharing ?? false
   });
 
-  socket.to(roomId).emit("media:status", updatedUser);
+  if (requestedRoomId && current?.roomId === requestedRoomId) {
+    socket.to(requestedRoomId).emit("media:status", updatedUser);
+  }
 };
 
 export const registerSocketHandlers = (io: SocketServer): void => {
