@@ -103,7 +103,7 @@ const handleJoinRoom = async (
     });
     socket.emit("errorMessage", {
       code: "ALREADY_IN_ROOM",
-      message: "Ya estás conectado a esta sala desde otra pestaña."
+      message: "Ya te encuentras en esta sala desde otra pestaña o dispositivo. No puedes unirte dos veces."
     });
     return;
   }
@@ -190,15 +190,7 @@ const handleDeleteRoom = async (
   }
 
   const requesterPresence = getUser(socket.id);
-  if (requesterPresence?.roomId !== roomId) {
-    socket.emit("errorMessage", {
-      code: "NOT_IN_ROOM",
-      message: "Debes estar conectado a la sala para eliminarla."
-    });
-    return;
-  }
-
-  const ownerUid = requesterPresence.roomOwnerUid ?? await ChatService.getRoomOwnerUid(roomId);
+  const ownerUid = requesterPresence?.roomOwnerUid ?? await ChatService.getRoomOwnerUid(roomId);
   if (!ownerUid) {
     socket.emit("errorMessage", { code: "ROOM_NOT_FOUND", message: "La sala no existe." });
     return;
@@ -232,16 +224,8 @@ const handleDeleteRoom = async (
 
 const handleMediaStatus = (io: SocketServer, socket: TypedSocket, payload: MediaStatusPayload): void => {
   const requestedRoomId = payload.roomId?.trim();
-  if (!requestedRoomId) {
-    socket.emit("errorMessage", {
-      code: "INVALID_ROOM",
-      message: "roomId es obligatorio."
-    });
-    return;
-  }
-
   const current = getUser(socket.id);
-  if (current?.roomId !== requestedRoomId) {
+  if (requestedRoomId && current?.roomId !== requestedRoomId) {
     socket.emit("errorMessage", {
       code: "NOT_IN_ROOM",
       message: "Debes estar conectado a la sala para cambiar tu estado de medios."
@@ -250,13 +234,14 @@ const handleMediaStatus = (io: SocketServer, socket: TypedSocket, payload: Media
   }
 
   const updatedUser = upsertUser(socket.id, {
-    roomId: requestedRoomId,
     isMuted: payload.isMuted ?? current?.isMuted ?? false,
     isVideoOff: payload.isVideoOff ?? current?.isVideoOff ?? false,
     isScreenSharing: payload.isScreenSharing ?? current?.isScreenSharing ?? false
   });
 
-  socket.to(requestedRoomId).emit("media:status", updatedUser);
+  if (requestedRoomId) {
+    socket.to(requestedRoomId).emit("media:status", updatedUser);
+  }
 };
 
 const canSignalToSocket = (
