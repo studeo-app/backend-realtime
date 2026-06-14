@@ -12,10 +12,13 @@ import { logger } from "../utils/logger.js";
 import type {
   ClientToServerEvents,
   DeleteRoomPayload,
+  IceCandidatePayload,
   JoinRoomPayload,
   MediaStatusPayload,
   MessageSendPayload,
-  ServerToClientEvents
+  ServerToClientEvents,
+  WebRtcAnswerPayload,
+  WebRtcOfferPayload
 } from "../types/socket-events.js";
 import { AuthenticatedSocket } from "./auth.middleware.js";
 import { ChatService } from "../services/chat.service.js";
@@ -228,17 +231,101 @@ const handleDeleteRoom = async (
 };
 
 const handleMediaStatus = (io: SocketServer, socket: TypedSocket, payload: MediaStatusPayload): void => {
-  const current = getUser(socket.id);
   const requestedRoomId = payload.roomId?.trim();
+  if (!requestedRoomId) {
+    socket.emit("errorMessage", {
+      code: "INVALID_ROOM",
+      message: "roomId es obligatorio."
+    });
+    return;
+  }
+
+  const current = getUser(socket.id);
+  if (current?.roomId !== requestedRoomId) {
+    socket.emit("errorMessage", {
+      code: "NOT_IN_ROOM",
+      message: "Debes estar conectado a la sala para cambiar tu estado de medios."
+    });
+    return;
+  }
+
   const updatedUser = upsertUser(socket.id, {
+    roomId: requestedRoomId,
     isMuted: payload.isMuted ?? current?.isMuted ?? false,
     isVideoOff: payload.isVideoOff ?? current?.isVideoOff ?? false,
     isScreenSharing: payload.isScreenSharing ?? current?.isScreenSharing ?? false
   });
 
-  if (requestedRoomId && current?.roomId === requestedRoomId) {
-    socket.to(requestedRoomId).emit("media:status", updatedUser);
+  socket.to(requestedRoomId).emit("media:status", updatedUser);
+};
+
+const canSignalToSocket = (
+  socket: TypedSocket,
+  roomId: string | undefined,
+  toSocketId: string | undefined
+): roomId is string => {
+  const normalizedRoomId = roomId?.trim();
+  if (!normalizedRoomId || !toSocketId?.trim()) {
+    socket.emit("errorMessage", {
+      code: "INVALID_WEBRTC_SIGNAL",
+      message: "roomId y toSocketId son obligatorios."
+    });
+    return false;
   }
+
+  const sender = getUser(socket.id);
+  const receiver = getUser(toSocketId);
+  if (sender?.roomId !== normalizedRoomId || receiver?.roomId !== normalizedRoomId) {
+    socket.emit("errorMessage", {
+      code: "WEBRTC_SIGNAL_FORBIDDEN",
+      message: "No puedes enviar senales WebRTC fuera de tu sala."
+    });
+    return false;
+  }
+
+  return true;
+};
+
+const handleWebRtcOffer = (
+  io: SocketServer,
+  socket: TypedSocket,
+  payload: WebRtcOfferPayload
+): void => {
+  if (!canSignalToSocket(socket, payload.roomId, payload.toSocketId)) return;
+
+  io.to(payload.toSocketId).emit("webrtc:offer", {
+    fromSocketId: socket.id,
+    roomId: payload.roomId.trim(),
+    offer: payload.offer
+  });
+};
+
+const handleWebRtcAnswer = (
+  io: SocketServer,
+  socket: TypedSocket,
+  payload: WebRtcAnswerPayload
+): void => {
+  if (!canSignalToSocket(socket, payload.roomId, payload.toSocketId)) return;
+
+  io.to(payload.toSocketId).emit("webrtc:answer", {
+    fromSocketId: socket.id,
+    roomId: payload.roomId.trim(),
+    answer: payload.answer
+  });
+};
+
+const handleIceCandidate = (
+  io: SocketServer,
+  socket: TypedSocket,
+  payload: IceCandidatePayload
+): void => {
+  if (!canSignalToSocket(socket, payload.roomId, payload.toSocketId)) return;
+
+  io.to(payload.toSocketId).emit("webrtc:ice-candidate", {
+    fromSocketId: socket.id,
+    roomId: payload.roomId.trim(),
+    candidate: payload.candidate
+  });
 };
 
 export const registerSocketHandlers = (io: SocketServer): void => {
@@ -322,17 +409,11 @@ export const registerSocketHandlers = (io: SocketServer): void => {
     socket.on("media:status", (payload) => handleMediaStatus(io, socket, payload));
 
     // WebRTC signalling — forward only, no presence changes
-    socket.on("webrtc:offer", ({ roomId, toSocketId, offer }) => {
-      io.to(toSocketId).emit("webrtc:offer", { fromSocketId: socket.id, roomId, offer });
-    });
+    socket.on("webrtc:offer", (payload) => handleWebRtcOffer(io, socket, payload));
 
-    socket.on("webrtc:answer", ({ roomId, toSocketId, answer }) => {
-      io.to(toSocketId).emit("webrtc:answer", { fromSocketId: socket.id, roomId, answer });
-    });
+    socket.on("webrtc:answer", (payload) => handleWebRtcAnswer(io, socket, payload));
 
-    socket.on("webrtc:ice-candidate", ({ roomId, toSocketId, candidate }) => {
-      io.to(toSocketId).emit("webrtc:ice-candidate", { fromSocketId: socket.id, roomId, candidate });
-    });
+    socket.on("webrtc:ice-candidate", (payload) => handleIceCandidate(io, socket, payload));
 
     // ── Disconnect: mirrors leaveRoom + full cleanup ──────────────────────
     socket.on("disconnect", () => {
