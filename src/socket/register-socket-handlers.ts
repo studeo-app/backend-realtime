@@ -231,14 +231,17 @@ const handleDeleteRoom = async (
 };
 
 const handleMediaStatus = (io: SocketServer, socket: TypedSocket, payload: MediaStatusPayload): void => {
-  const roomId = payload.roomId?.trim();
-  if (!roomId) {
-    socket.emit("errorMessage", { code: "INVALID_ROOM", message: "roomId es obligatorio." });
+  const requestedRoomId = payload.roomId?.trim();
+  if (!requestedRoomId) {
+    socket.emit("errorMessage", {
+      code: "INVALID_ROOM",
+      message: "roomId es obligatorio."
+    });
     return;
   }
 
   const current = getUser(socket.id);
-  if (current?.roomId !== roomId) {
+  if (current?.roomId !== requestedRoomId) {
     socket.emit("errorMessage", {
       code: "NOT_IN_ROOM",
       message: "Debes estar conectado a la sala para cambiar tu estado de medios."
@@ -247,13 +250,13 @@ const handleMediaStatus = (io: SocketServer, socket: TypedSocket, payload: Media
   }
 
   const updatedUser = upsertUser(socket.id, {
-    roomId,
+    roomId: requestedRoomId,
     isMuted: payload.isMuted ?? current?.isMuted ?? false,
     isVideoOff: payload.isVideoOff ?? current?.isVideoOff ?? false,
     isScreenSharing: payload.isScreenSharing ?? current?.isScreenSharing ?? false
   });
 
-  socket.to(roomId).emit("media:status", updatedUser);
+  socket.to(requestedRoomId).emit("media:status", updatedUser);
 };
 
 const canSignalToSocket = (
