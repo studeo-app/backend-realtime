@@ -116,7 +116,13 @@ const handleJoinRoom = async (
 
   // ── Join new room ────────────────────────────────────────────────────────
   socket.join(roomId);
-  const updatedUser = upsertUser(socket.id, { roomId, roomOwnerUid: ownerUid, uid: uid ?? null });
+  const updatedUser = upsertUser(socket.id, {
+    roomId,
+    roomOwnerUid: ownerUid,
+    uid: uid ?? null,
+    isMuted: payload.isMuted ?? false,
+    isVideoOff: payload.isVideoOff ?? false,
+  });
   socket.to(roomId).emit("userJoined", updatedUser);
   emitRoomUsers(io, roomId);
 

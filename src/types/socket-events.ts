@@ -30,6 +30,8 @@ export interface RoomMessage {
 
 export interface JoinRoomPayload {
   roomId: string;
+  isMuted?: boolean;
+  isVideoOff?: boolean;
 }
 
 export interface DeleteRoomPayload {
