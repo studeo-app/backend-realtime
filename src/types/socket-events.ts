@@ -99,7 +99,8 @@ export interface ClientToServerEvents {
   joinRoom: (payload: JoinRoomPayload) => void;
   deleteRoom: (payload: DeleteRoomPayload) => void;
   leaveRoom: (roomId?: string) => void;
-  roomMemberRemoved: (payload: { roomId: string }) => void;
+  roomMemberRemoved: (payload: { roomId: string; uid?: string }) => void;
+  roomMemberMuted: (payload: { roomId: string; uid: string }) => void;
   roomUsersPrevisualization: (payload: RoomUsersPrevisualizationPayload) => void;
   "message:send": (payload: MessageSendPayload) => void;
   "media:status": (payload: MediaStatusPayload) => void;
@@ -115,6 +116,7 @@ export interface ServerToClientEvents {
   userJoined: (user: UserPresence) => void;
   userLeft: (payload: { socketId: string; roomId: string | null }) => void;
   roomMemberRemoved: (payload: RoomMemberRemovedPayload) => void;
+  roomMemberMuted: (payload: { roomId: string; uid: string }) => void;
   roomDeleted: (payload: RoomDeletedPayload) => void;
   "message:new": (message: MessageNewPayload) => void;
   "message:error": (payload: { code: string; message: string }) => void;

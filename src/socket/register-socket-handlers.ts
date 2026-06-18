@@ -379,11 +379,60 @@ export const registerSocketHandlers = (io: SocketServer): void => {
         return;
       }
 
-      io.to(roomId).emit("roomMemberRemoved", { roomId, uid });
-      const leftRoom = safeLeaveRoom(socket, roomId);
-      if (leftRoom) {
-        emitRoomUsers(io, leftRoom);
+      const targetUid = payload.uid || uid;
+
+      // Si el anfitrión está expulsando a otro miembro, validar permisos
+      if (targetUid !== uid) {
+        const requesterPresence = getUser(socket.id);
+        if (!requesterPresence || requesterPresence.roomOwnerUid !== uid) {
+          socket.emit("errorMessage", { code: "FORBIDDEN", message: "Solo el anfitrión puede expulsar miembros." });
+          return;
+        }
+
+        // Forzar la desconexión del socket del usuario expulsado en el servidor
+        const targetPresence = getUsersByRoom(roomId).find((u) => u.uid === targetUid);
+        if (targetPresence) {
+          const targetSocket = io.sockets.sockets.get(targetPresence.socketId) as TypedSocket | undefined;
+          if (targetSocket) {
+            targetSocket.leave(roomId);
+            upsertUser(targetPresence.socketId, { roomId: null, roomOwnerUid: null });
+            targetSocket.emit("roomMemberRemoved", { roomId, uid: targetUid });
+          }
+        }
       }
+
+      io.to(roomId).emit("roomMemberRemoved", { roomId, uid: targetUid });
+
+      if (targetUid === uid) {
+        const leftRoom = safeLeaveRoom(socket, roomId);
+        if (leftRoom) {
+          emitRoomUsers(io, leftRoom);
+        }
+      } else {
+        emitRoomUsers(io, roomId);
+      }
+    });
+
+    socket.on("roomMemberMuted", (payload) => {
+      const roomId = payload.roomId?.trim();
+      if (!roomId) {
+        socket.emit("errorMessage", { code: "INVALID_ROOM", message: "roomId es obligatorio." });
+        return;
+      }
+
+      if (!uid) {
+        socket.emit("errorMessage", { code: "UNAUTHORIZED", message: "Usuario no autenticado." });
+        return;
+      }
+
+      // Validar que el emisor sea el anfitrión de la sala
+      const requesterPresence = getUser(socket.id);
+      if (!requesterPresence || requesterPresence.roomOwnerUid !== uid) {
+        socket.emit("errorMessage", { code: "FORBIDDEN", message: "Solo el anfitrión puede silenciar miembros." });
+        return;
+      }
+
+      io.to(roomId).emit("roomMemberMuted", payload);
     });
 
     socket.on("roomUsersPrevisualization", (payload) => {
