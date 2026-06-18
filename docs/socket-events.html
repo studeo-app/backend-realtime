@@ -407,6 +407,7 @@
         <a class="nav-link" href="#leaveRoom">leaveRoom <span class="badge-c2s">C→S</span></a>
         <a class="nav-link" href="#messageSend">message:send <span class="badge-c2s">C→S</span></a>
         <a class="nav-link" href="#mediaStatus">media:status <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#reactionSend">reaction:send <span class="badge-c2s">C→S</span></a>
         <a class="nav-link" href="#webrtc">webrtc:* <span class="badge-c2s">C→S</span></a>
         <a class="nav-link" href="#ping">ping <span class="badge-c2s">C→S</span></a>
 
@@ -675,6 +676,30 @@ socket.emit(<span class="hlstring">"leaveRoom"</span>, <span class="hlstring">"a
           </div>
         </div>
 
+        <!-- reaction:send -->
+        <div class="event-card" id="reactionSend">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">reaction:send</span>
+            <span class="event-summary">Enviar una reacción efímera a la sala</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>Retransmite una reacción visual a todos los sockets de la misma sala. No se persiste en Firestore.</p>
+            <div class="sub-title">Payload</div>
+            <pre>socket.emit(<span class="hlstring">"reaction:send"</span>, {
+  roomId: <span class="hlstring">"abc123"</span>,
+  emoji: <span class="hlstring">"👏"</span>
+});</pre>
+            <div class="sub-title">Validaciones</div>
+            <p>El emisor debe estar presente en la sala, el emoji debe pertenecer a la lista permitida y se aplica un cooldown por socket.</p>
+            <div class="sub-title">Emite en éxito</div>
+            <div class="emits-item">
+              <span class="emits-code">reaction:new</span>
+              <span class="emits-desc">{ id, roomId, socketId, uid, username, emoji, createdAt } → todos en la sala.</span>
+            </div>
+          </div>
+        </div>
+
         <!-- webrtc:* -->
         <div class="event-card" id="webrtc">
           <div class="event-header" onclick="toggle(this)">
@@ -726,6 +751,7 @@ socket.on(<span class="hlstring">"pong"</span>, () => console.log(<span class="h
           <tr><td><code>message:error</code></td><td><code>{ code, message }</code></td><td>Error en message:send</td><td>El socket emisor</td></tr>
           <tr><td><code>errorMessage</code></td><td><code>{ code, message }</code></td><td>Error general (joinRoom, media…)</td><td>El socket emisor</td></tr>
           <tr><td><code>media:status</code></td><td><code>UserPresence</code></td><td>media:status recibido</td><td>Otros miembros</td></tr>
+          <tr><td><code>reaction:new</code></td><td><code>{ id, roomId, socketId, uid, username, emoji, createdAt }</code></td><td>reaction:send validado</td><td>Todos en la sala (incluye emisor)</td></tr>
           <tr><td><code>webrtc:offer</code></td><td><code>{ fromSocketId, roomId, offer }</code></td><td>webrtc:offer recibido</td><td>Socket toSocketId</td></tr>
           <tr><td><code>webrtc:answer</code></td><td><code>{ fromSocketId, roomId, answer }</code></td><td>webrtc:answer recibido</td><td>Socket toSocketId</td></tr>
           <tr><td><code>webrtc:ice-candidate</code></td><td><code>{ fromSocketId, roomId, candidate }</code></td><td>webrtc:ice-candidate recibido</td><td>Socket toSocketId</td></tr>
