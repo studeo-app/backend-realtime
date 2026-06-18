@@ -1,4 +1,5 @@
 import type { Server, Socket } from "socket.io";
+import { randomUUID } from "node:crypto";
 import {
   clearRoomPresence,
   getUser,
@@ -16,10 +17,16 @@ import type {
   JoinRoomPayload,
   MediaStatusPayload,
   MessageSendPayload,
+  RoomReactionSendPayload,
   ServerToClientEvents,
   WebRtcAnswerPayload,
   WebRtcOfferPayload
 } from "../types/socket-events.js";
+import {
+  canSendRoomReaction,
+  clearRoomReactionRateLimit,
+  isAllowedRoomReaction
+} from "./room-reactions.js";
 import { AuthenticatedSocket } from "./auth.middleware.js";
 import { ChatService } from "../services/chat.service.js";
 
@@ -250,6 +257,44 @@ const handleMediaStatus = (io: SocketServer, socket: TypedSocket, payload: Media
   }
 };
 
+const handleRoomReaction = (
+  io: SocketServer,
+  socket: TypedSocket,
+  payload: RoomReactionSendPayload
+): void => {
+  const roomId = payload.roomId?.trim();
+  const emoji = payload.emoji?.trim();
+  const user = getUser(socket.id);
+
+  if (!roomId || user?.roomId !== roomId) {
+    socket.emit("errorMessage", {
+      code: "REACTION_NOT_IN_ROOM",
+      message: "Debes estar conectado a la sala para reaccionar."
+    });
+    return;
+  }
+
+  if (!emoji || !isAllowedRoomReaction(emoji)) {
+    socket.emit("errorMessage", {
+      code: "INVALID_REACTION",
+      message: "La reaccion seleccionada no esta permitida."
+    });
+    return;
+  }
+
+  if (!canSendRoomReaction(socket.id)) return;
+
+  io.to(roomId).emit("reaction:new", {
+    id: randomUUID(),
+    roomId,
+    socketId: socket.id,
+    uid: user.uid,
+    username: user.username || user.name || "Usuario",
+    emoji,
+    createdAt: new Date().toISOString()
+  });
+};
+
 const canSignalToSocket = (
   socket: TypedSocket,
   roomId: string | undefined,
@@ -448,6 +493,8 @@ export const registerSocketHandlers = (io: SocketServer): void => {
 
     socket.on("media:status", (payload) => handleMediaStatus(io, socket, payload));
 
+    socket.on("reaction:send", (payload) => handleRoomReaction(io, socket, payload));
+
     // WebRTC signalling — forward only, no presence changes
     socket.on("webrtc:offer", (payload) => handleWebRtcOffer(io, socket, payload));
 
@@ -457,6 +504,7 @@ export const registerSocketHandlers = (io: SocketServer): void => {
 
     // ── Disconnect: mirrors leaveRoom + full cleanup ──────────────────────
     socket.on("disconnect", () => {
+      clearRoomReactionRateLimit(socket.id);
       const user = getUser(socket.id);
 
       // Log BEFORE removal

@@ -94,6 +94,21 @@ export interface RoomMemberRemovedPayload {
   uid: string;
 }
 
+export interface RoomReactionSendPayload {
+  roomId: string;
+  emoji: string;
+}
+
+export interface RoomReactionPayload {
+  id: string;
+  roomId: string;
+  socketId: string;
+  uid: string | null;
+  username: string;
+  emoji: string;
+  createdAt: string;
+}
+
 export interface ClientToServerEvents {
   newUser: () => void;
   joinRoom: (payload: JoinRoomPayload) => void;
@@ -104,6 +119,7 @@ export interface ClientToServerEvents {
   roomUsersPrevisualization: (payload: RoomUsersPrevisualizationPayload) => void;
   "message:send": (payload: MessageSendPayload) => void;
   "media:status": (payload: MediaStatusPayload) => void;
+  "reaction:send": (payload: RoomReactionSendPayload) => void;
   "webrtc:offer": (payload: WebRtcOfferPayload) => void;
   "webrtc:answer": (payload: WebRtcAnswerPayload) => void;
   "webrtc:ice-candidate": (payload: IceCandidatePayload) => void;
@@ -122,6 +138,7 @@ export interface ServerToClientEvents {
   "message:error": (payload: { code: string; message: string }) => void;
   errorMessage: (payload: { code: string; message: string }) => void;
   "media:status": (payload: UserPresence) => void;
+  "reaction:new": (payload: RoomReactionPayload) => void;
   "webrtc:offer": (payload: {
     fromSocketId: string;
     roomId: string;
