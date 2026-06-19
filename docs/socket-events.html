@@ -405,8 +405,13 @@
         <a class="nav-link" href="#newUser">newUser <span class="badge-c2s">C→S</span></a>
         <a class="nav-link" href="#joinRoom">joinRoom <span class="badge-c2s">C→S</span></a>
         <a class="nav-link" href="#leaveRoom">leaveRoom <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#roomPreview">roomUsersPrevisualization <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#memberRemoved">roomMemberRemoved <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#memberMuted">roomMemberMuted <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#deleteRoom">deleteRoom <span class="badge-c2s">C→S</span></a>
         <a class="nav-link" href="#messageSend">message:send <span class="badge-c2s">C→S</span></a>
         <a class="nav-link" href="#mediaStatus">media:status <span class="badge-c2s">C→S</span></a>
+        <a class="nav-link" href="#reactionSend">reaction:send <span class="badge-c2s">C→S</span></a>
         <a class="nav-link" href="#webrtc">webrtc:* <span class="badge-c2s">C→S</span></a>
         <a class="nav-link" href="#ping">ping <span class="badge-c2s">C→S</span></a>
 
@@ -416,6 +421,7 @@
         <div class="sidebar-section">Referencia</div>
         <a class="nav-link" href="#models">Modelos de datos</a>
         <a class="nav-link" href="#edge">Casos edge</a>
+        <a class="nav-link" href="#testing">Matriz de pruebas</a>
       </nav>
 
       <!-- Main -->
@@ -429,6 +435,15 @@
             <span class="meta-badge auth">🔐 Firebase JWT requerido</span>
             <span class="meta-badge version">Socket.IO v4.7</span>
           </div>
+        </div>
+
+        <div class="auth-box">
+          <h3>📡 Arquitectura de medios</h3>
+          <p>
+            Socket.IO transporta presencia, moderación, chat y señalización WebRTC. El audio, el video y la compartición de pantalla
+            <strong>no pasan por este servidor</strong>: viajan directamente entre navegadores mediante conexiones WebRTC peer-to-peer.
+            STUN ayuda a descubrir rutas de conexión y TURN actúa como relé de medios cuando una conexión directa no es posible.
+          </p>
         </div>
 
         <!-- Auth -->
@@ -516,12 +531,16 @@ socket.emit(<span class="hlstring">"newUser"</span>);</pre>
             <p>Une el socket a la sala especificada. Verifica existencia en Firestore y previene que el mismo usuario (mismo uid) ocupe la misma sala desde múltiples pestañas.</p>
             <div class="sub-title">Payload</div>
             <pre>socket.emit(<span class="hlstring">"joinRoom"</span>, {
-  roomId: <span class="hlstring">"abc123"</span>  <span class="hlcomment">// ← requerido</span>
+  roomId: <span class="hlstring">"abc123"</span>, <span class="hlcomment">// requerido</span>
+  isMuted: <span class="hlnumber">false</span>,       <span class="hlcomment">// opcional</span>
+  isVideoOff: <span class="hlnumber">false</span>     <span class="hlcomment">// opcional</span>
 });</pre>
             <div class="sub-title">Campos</div>
             <table>
               <tr><th>Campo</th><th>Tipo</th><th>¿Req?</th><th>Descripción</th></tr>
               <tr><td><code>roomId</code></td><td><code>string</code></td><td><span class="req">✅</span></td><td>ID de la sala (debe existir en Firestore)</td></tr>
+              <tr><td><code>isMuted</code></td><td><code>boolean</code></td><td><span class="opt">❌</span></td><td>Estado inicial del micrófono. Default: false.</td></tr>
+              <tr><td><code>isVideoOff</code></td><td><code>boolean</code></td><td><span class="opt">❌</span></td><td>Estado inicial de la cámara. Default: false.</td></tr>
             </table>
             <div class="sub-title">Emite en éxito</div>
             <div class="emits-item">
@@ -570,6 +589,83 @@ socket.emit(<span class="hlstring">"leaveRoom"</span>, <span class="hlstring">"a
           </div>
         </div>
 
+        <!-- roomUsersPrevisualization -->
+        <div class="event-card" id="roomPreview">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">roomUsersPrevisualization</span>
+            <span class="event-summary">Consultar presencia de una sala desde el lobby</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>Devuelve al socket solicitante la lista de usuarios conectados a una sala sin unirlo al room de Socket.IO. Se usa en la previsualización del lobby.</p>
+            <div class="sub-title">Payload</div>
+            <pre>socket.emit(<span class="hlstring">"roomUsersPrevisualization"</span>, {
+  roomId: <span class="hlstring">"abc123"</span>,
+  socketId: socket.id <span class="hlcomment">// informativo; el servidor responde al socket emisor</span>
+});</pre>
+            <div class="sub-title">Emite en éxito</div>
+            <div class="emits-item">
+              <span class="emits-code">roomUsers</span>
+              <span class="emits-desc">UserPresence[] → únicamente al socket solicitante.</span>
+            </div>
+            <div class="sub-title">Errores posibles</div>
+            <div class="error-list">
+              <div class="error-item"><span class="error-code">INVALID_ROOM</span><span class="error-desc">roomId vacío o ausente.</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- roomMemberRemoved -->
+        <div class="event-card" id="memberRemoved">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">roomMemberRemoved</span>
+            <span class="event-summary">Salir voluntariamente o expulsar a un miembro</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>Si <code>uid</code> corresponde al emisor, funciona como salida voluntaria. Si corresponde a otro usuario, solo el anfitrión puede ejecutarlo. El servidor saca al socket objetivo de la sala, limpia su presencia y actualiza la lista.</p>
+            <div class="sub-title">Payload</div>
+            <pre>socket.emit(<span class="hlstring">"roomMemberRemoved"</span>, {
+  roomId: <span class="hlstring">"abc123"</span>,
+  uid: <span class="hlstring">"firebase-uid-objetivo"</span> <span class="hlcomment">// opcional; default: uid del emisor</span>
+});</pre>
+            <div class="sub-title">Emite en éxito</div>
+            <div class="emits-item"><span class="emits-code">roomMemberRemoved</span><span class="emits-desc">{ roomId, uid } → usuario objetivo y miembros de la sala.</span></div>
+            <div class="emits-item"><span class="emits-code">roomUsers</span><span class="emits-desc">Lista actualizada → miembros restantes.</span></div>
+            <div class="sub-title">Errores posibles</div>
+            <div class="error-list">
+              <div class="error-item"><span class="error-code">INVALID_ROOM</span><span class="error-desc">roomId vacío o ausente.</span></div>
+              <div class="error-item"><span class="error-code">UNAUTHORIZED</span><span class="error-desc">Socket sin uid autenticado.</span></div>
+              <div class="error-item"><span class="error-code">FORBIDDEN</span><span class="error-desc">Un usuario no anfitrión intenta expulsar a otro miembro.</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- roomMemberMuted -->
+        <div class="event-card" id="memberMuted">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">roomMemberMuted</span>
+            <span class="event-summary">Silenciar el micrófono de un miembro como anfitrión</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>Solo el anfitrión de la sala puede emitirlo. El servidor difunde la orden; el cliente cuyo uid coincide deshabilita su track local de audio, actualiza su estado AV y emite <code>media:status</code>.</p>
+            <div class="sub-title">Payload</div>
+            <pre>socket.emit(<span class="hlstring">"roomMemberMuted"</span>, {
+  roomId: <span class="hlstring">"abc123"</span>,
+  uid: <span class="hlstring">"firebase-uid-objetivo"</span>
+});</pre>
+            <div class="sub-title">Emite en éxito</div>
+            <div class="emits-item"><span class="emits-code">roomMemberMuted</span><span class="emits-desc">{ roomId, uid } → todos los sockets de la sala.</span></div>
+            <div class="sub-title">Errores posibles</div>
+            <div class="error-list">
+              <div class="error-item"><span class="error-code">INVALID_ROOM</span><span class="error-desc">roomId vacío o ausente.</span></div>
+              <div class="error-item"><span class="error-code">UNAUTHORIZED</span><span class="error-desc">Socket sin uid autenticado.</span></div>
+              <div class="error-item"><span class="error-code">FORBIDDEN</span><span class="error-desc">El emisor no es el anfitrión.</span></div>
+            </div>
+          </div>
+        </div>
+
         <!-- deleteRoom -->
         <div class="event-card" id="deleteRoom">
           <div class="event-header" onclick="toggle(this)">
@@ -601,9 +697,9 @@ socket.emit(<span class="hlstring">"leaveRoom"</span>, <span class="hlstring">"a
             <div class="error-list">
               <div class="error-item"><span class="error-code">INVALID_ROOM</span><span class="error-desc">roomId vacio o ausente.</span></div>
               <div class="error-item"><span class="error-code">UNAUTHORIZED</span><span class="error-desc">El socket no tiene uid autenticado.</span></div>
-              <div class="error-item"><span class="error-code">NOT_IN_ROOM</span><span class="error-desc">El socket emisor no esta conectado a esa sala.</span></div>
               <div class="error-item"><span class="error-code">ROOM_NOT_FOUND</span><span class="error-desc">No existe presencia owner ni documento Firestore para validar.</span></div>
               <div class="error-item"><span class="error-code">FORBIDDEN</span><span class="error-desc">El uid emisor no es el propietario de la sala.</span></div>
+              <div class="error-item"><span class="error-code">DELETE_ROOM_FAILED</span><span class="error-desc">Ocurrió un error inesperado al validar o procesar la eliminación.</span></div>
             </div>
           </div>
         </div>
@@ -662,7 +758,7 @@ socket.emit(<span class="hlstring">"leaveRoom"</span>, <span class="hlstring">"a
             <div class="sub-title">Campos</div>
             <table>
               <tr><th>Campo</th><th>Tipo</th><th>¿Req?</th><th>Descripción</th></tr>
-              <tr><td><code>roomId</code></td><td><code>string</code></td><td><span class="req">✅</span></td><td>Sala donde reportar el estado</td></tr>
+              <tr><td><code>roomId</code></td><td><code>string</code></td><td><span class="opt">❌</span></td><td>Sala donde reportar el estado. Sin roomId actualiza presencia local, pero no hace broadcast.</td></tr>
               <tr><td><code>isMuted</code></td><td><code>boolean</code></td><td><span class="opt">❌</span></td><td>Micrófono silenciado. Default: mantiene valor anterior.</td></tr>
               <tr><td><code>isVideoOff</code></td><td><code>boolean</code></td><td><span class="opt">❌</span></td><td>Cámara desactivada.</td></tr>
               <tr><td><code>isScreenSharing</code></td><td><code>boolean</code></td><td><span class="opt">❌</span></td><td>Compartiendo pantalla.</td></tr>
@@ -672,6 +768,40 @@ socket.emit(<span class="hlstring">"leaveRoom"</span>, <span class="hlstring">"a
               <span class="emits-code">media:status</span>
               <span class="emits-desc">UserPresence completo → otros usuarios de la sala.</span>
             </div>
+            <div class="sub-title">Errores posibles</div>
+            <div class="error-list">
+              <div class="error-item"><span class="error-code">NOT_IN_ROOM</span><span class="error-desc">El roomId solicitado no coincide con la sala activa del socket.</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- reaction:send -->
+        <div class="event-card" id="reactionSend">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">reaction:send</span>
+            <span class="event-summary">Enviar una reacción efímera a la sala</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p>Retransmite una reacción visual a todos los sockets de la misma sala. No se persiste en Firestore.</p>
+            <div class="sub-title">Payload</div>
+            <pre>socket.emit(<span class="hlstring">"reaction:send"</span>, {
+  roomId: <span class="hlstring">"abc123"</span>,
+  emoji: <span class="hlstring">"👏"</span>
+});</pre>
+            <div class="sub-title">Validaciones</div>
+            <p>El emisor debe estar presente en la sala, el emoji debe pertenecer a la lista permitida y se aplica un cooldown por socket.</p>
+            <div class="sub-title">Emite en éxito</div>
+            <div class="emits-item">
+              <span class="emits-code">reaction:new</span>
+              <span class="emits-desc">{ id, roomId, socketId, uid, username, emoji, createdAt } → todos en la sala.</span>
+            </div>
+            <div class="sub-title">Errores posibles</div>
+            <div class="error-list">
+              <div class="error-item"><span class="error-code">REACTION_NOT_IN_ROOM</span><span class="error-desc">El socket no pertenece al roomId indicado.</span></div>
+              <div class="error-item"><span class="error-code">INVALID_REACTION</span><span class="error-desc">Emoji vacío o fuera de la lista permitida.</span></div>
+            </div>
+            <p>Si el socket excede el cooldown, la reacción se descarta silenciosamente y no se emite <code>reaction:new</code>.</p>
           </div>
         </div>
 
@@ -696,6 +826,11 @@ socket.emit(<span class="hlstring">"leaveRoom"</span>, <span class="hlstring">"a
               <span class="emits-code">webrtc:offer/answer/ice-candidate</span>
               <span class="emits-desc">{ fromSocketId, roomId, offer/answer/candidate } → socket toSocketId.</span>
             </div>
+            <div class="sub-title">Errores posibles</div>
+            <div class="error-list">
+              <div class="error-item"><span class="error-code">INVALID_WEBRTC_SIGNAL</span><span class="error-desc">roomId o toSocketId vacío/ausente.</span></div>
+              <div class="error-item"><span class="error-code">WEBRTC_SIGNAL_FORBIDDEN</span><span class="error-desc">Emisor y receptor no pertenecen a la misma sala.</span></div>
+            </div>
           </div>
         </div>
 
@@ -718,14 +853,17 @@ socket.on(<span class="hlstring">"pong"</span>, () => console.log(<span class="h
         <table>
           <tr><th>Evento</th><th>Payload</th><th>Cuándo se emite</th><th>Destinatario</th></tr>
           <tr><td><code>usersOnline</code></td><td><code>UserPresence[]</code></td><td>Tras newUser o disconnect</td><td>Todos los sockets</td></tr>
-          <tr><td><code>roomUsers</code></td><td><code>UserPresence[]</code></td><td>joinRoom / leaveRoom / disconnect</td><td>Miembros de la sala</td></tr>
+          <tr><td><code>roomUsers</code></td><td><code>UserPresence[]</code></td><td>joinRoom / leaveRoom / disconnect / roomUsersPrevisualization</td><td>Miembros de la sala; en previsualización, solo el solicitante</td></tr>
           <tr><td><code>userJoined</code></td><td><code>UserPresence</code></td><td>Nuevo miembro entra a la sala</td><td>Otros miembros</td></tr>
           <tr><td><code>userLeft</code></td><td><code>{ socketId, roomId }</code></td><td>leaveRoom o disconnect</td><td>Otros miembros</td></tr>
+          <tr><td><code>roomMemberRemoved</code></td><td><code>{ roomId, uid }</code></td><td>Salida voluntaria o expulsión validada</td><td>Usuario objetivo y miembros de la sala</td></tr>
+          <tr><td><code>roomMemberMuted</code></td><td><code>{ roomId, uid }</code></td><td>Orden del anfitrión validada</td><td>Todos en la sala</td></tr>
           <tr><td><code>roomDeleted</code></td><td><code>{ roomId, deletedBy, reason }</code></td><td>deleteRoom validado</td><td>Todos en la sala eliminada</td></tr>
           <tr><td><code>message:new</code></td><td><code>{ uid, username, text, timestamp }</code></td><td>message:send exitoso</td><td>Todos en la sala (incluye emisor)</td></tr>
           <tr><td><code>message:error</code></td><td><code>{ code, message }</code></td><td>Error en message:send</td><td>El socket emisor</td></tr>
           <tr><td><code>errorMessage</code></td><td><code>{ code, message }</code></td><td>Error general (joinRoom, media…)</td><td>El socket emisor</td></tr>
           <tr><td><code>media:status</code></td><td><code>UserPresence</code></td><td>media:status recibido</td><td>Otros miembros</td></tr>
+          <tr><td><code>reaction:new</code></td><td><code>{ id, roomId, socketId, uid, username, emoji, createdAt }</code></td><td>reaction:send validado</td><td>Todos en la sala (incluye emisor)</td></tr>
           <tr><td><code>webrtc:offer</code></td><td><code>{ fromSocketId, roomId, offer }</code></td><td>webrtc:offer recibido</td><td>Socket toSocketId</td></tr>
           <tr><td><code>webrtc:answer</code></td><td><code>{ fromSocketId, roomId, answer }</code></td><td>webrtc:answer recibido</td><td>Socket toSocketId</td></tr>
           <tr><td><code>webrtc:ice-candidate</code></td><td><code>{ fromSocketId, roomId, candidate }</code></td><td>webrtc:ice-candidate recibido</td><td>Socket toSocketId</td></tr>
@@ -745,6 +883,9 @@ socket.on(<span class="hlstring">"pong"</span>, () => console.log(<span class="h
             <pre><span class="hlkey">interface</span> <span class="hltype">UserPresence</span> {
   socketId:       <span class="hltype">string</span>;        <span class="hlcomment">// ID único del socket (ephemeral)</span>
   uid:            <span class="hltype">string | null</span>; <span class="hlcomment">// Firebase UID del usuario</span>
+  username:       <span class="hltype">string | null</span>; <span class="hlcomment">// username obtenido durante autenticación</span>
+  name:           <span class="hltype">string | null</span>; <span class="hlcomment">// nombre visible del usuario</span>
+  avatarUrl:      <span class="hltype">string | null</span>; <span class="hlcomment">// URL del avatar</span>
   roomId:         <span class="hltype">string | null</span>; <span class="hlcomment">// null si no está en ninguna sala</span>
   roomOwnerUid:   <span class="hltype">string | null</span>; <span class="hlcomment">// owner de la sala activa, usado para validar deleteRoom</span>
   isMuted:        <span class="hltype">boolean</span>;
@@ -787,9 +928,126 @@ socket.on(<span class="hlstring">"pong"</span>, () => console.log(<span class="h
           <tr><td>10</td><td>message:send con username ausente</td><td><code>message:error { UNAUTHORIZED }</code></td></tr>
           <tr><td>11</td><td>leaveRoom sin estar en ninguna sala</td><td>No-op silencioso</td></tr>
           <tr><td>12</td><td>Cierre de pestaña sin emitir leaveRoom</td><td>Igual que leaveRoom: notifica userLeft, limpia presencia</td></tr>
-          <tr><td>13</td><td>media:status con roomId vacío</td><td><code>errorMessage { INVALID_ROOM }</code></td></tr>
+          <tr><td>13</td><td>media:status con roomId diferente a la sala activa</td><td><code>errorMessage { NOT_IN_ROOM }</code></td></tr>
           <tr><td>14</td><td>Error de Firestore al persistir mensaje</td><td>Se loguea el error; el broadcast ya ocurrió (no se interrumpe)</td></tr>
+          <tr><td>15</td><td>roomUsersPrevisualization sin roomId</td><td><code>errorMessage { INVALID_ROOM }</code></td></tr>
+          <tr><td>16</td><td>Expulsión solicitada por usuario no anfitrión</td><td><code>errorMessage { FORBIDDEN }</code></td></tr>
+          <tr><td>17</td><td>Silenciamiento solicitado por usuario no anfitrión</td><td><code>errorMessage { FORBIDDEN }</code></td></tr>
+          <tr><td>18</td><td>Reacción fuera de la lista permitida</td><td><code>errorMessage { INVALID_REACTION }</code></td></tr>
+          <tr><td>19</td><td>Reacción enviada fuera de la sala activa</td><td><code>errorMessage { REACTION_NOT_IN_ROOM }</code></td></tr>
+          <tr><td>20</td><td>Señal WebRTC sin roomId o toSocketId</td><td><code>errorMessage { INVALID_WEBRTC_SIGNAL }</code></td></tr>
+          <tr><td>21</td><td>Señal WebRTC hacia usuario de otra sala</td><td><code>errorMessage { WEBRTC_SIGNAL_FORBIDDEN }</code></td></tr>
         </table>
+
+        <!-- Testing Recommendations -->
+        <h2 class="section-title" id="testing">📊 Matriz de Pruebas Recomendadas</h2>
+
+        <div class="event-card open">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">Pruebas Funcionales Críticas</span>
+            <span class="event-summary">Eventos core del flujo multiusuario</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <table>
+              <tr><th>Test ID</th><th>Evento</th><th>Escenario</th><th>Criterio de éxito</th><th>Latencia objetivo</th></tr>
+              <tr><td>T-001</td><td><code>newUser</code></td><td>Usuario A conecta</td><td>Todos reciben <code>usersOnline</code> actualizado</td><td>&lt;500ms</td></tr>
+              <tr><td>T-002</td><td><code>joinRoom</code></td><td>Usuario A se une a sala ABC</td><td>Evento <code>userJoined</code> a otros, <code>roomUsers</code> incluye A</td><td>&lt;300ms</td></tr>
+              <tr><td>T-003</td><td><code>media:status</code></td><td>Usuario A silencia micrófono</td><td>Otros ven <code>isMuted: true</code>, icono actualizado</td><td>&lt;200ms</td></tr>
+              <tr><td>T-004</td><td><code>message:send</code></td><td>Usuario A envía "Hola"</td><td>Todos reciben <code>message:new</code> con texto, timestamp, uid</td><td>&lt;150ms</td></tr>
+              <tr><td>T-005</td><td><code>webrtc:offer</code></td><td>Usuario A inicia negociación con B</td><td>B recibe offer, puede responder con answer</td><td>&lt;1s</td></tr>
+              <tr><td>T-006</td><td><code>leaveRoom</code></td><td>Usuario A sale de sala</td><td>Otros ven <code>userLeft</code>, A removido de <code>roomUsers</code></td><td>&lt;300ms</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="event-card open">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">Pruebas de Carga</span>
+            <span class="event-summary">Conectividad multiusuario y throughput</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <table>
+              <tr><th>Test ID</th><th>Escenario</th><th>Usuarios</th><th>Evento por usuario</th><th>Resultado esperado</th></tr>
+              <tr><td>L-001</td><td>Todos se unen a sala simultáneamente</td><td>10</td><td><code>joinRoom</code></td><td>Todos conectan, <code>roomUsers</code> con 10 miembros</td></tr>
+              <tr><td>L-002</td><td>Flood de mensajes</td><td>10</td><td>5 msg/s por usuario</td><td>Todos reciben sin pérdida, en orden</td></tr>
+              <tr><td>L-003</td><td>Cambios AV simultáneos</td><td>10</td><td>Todos cambian mute al mismo tiempo</td><td>Replicación correcta, <latency <500ms</td></tr>
+              <tr><td>L-004</td><td>Screenshare concurrente</td><td>2-3</td><td><code>media:status isScreenSharing: true</code></td><td>Múltiples shares sin conflicto, cambio de speaker fluido</td></tr>
+              <tr><td>L-005</td><td>Desconexiones secuenciales</td><td>10</td><td>Cada 30s un usuario sale</td><td>Sin cascada de errores, otros permanecen estables</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="event-card open">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">Pruebas de Error Handling</span>
+            <span class="event-summary">Validación de errores y edge cases</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <table>
+              <tr><th>Test ID</th><th>Evento</th><th>Input inválido</th><th>Respuesta esperada</th></tr>
+              <tr><td>E-001</td><td><code>joinRoom</code></td><td>roomId vacío</td><td><code>errorMessage { code: INVALID_ROOM }</code></td></tr>
+              <tr><td>E-002</td><td><code>message:send</code></td><td>text: "   "</td><td><code>message:error { code: EMPTY_MESSAGE }</code></td></tr>
+              <tr><td>E-003</td><td><code>media:status</code></td><td>roomId distinto a sala activa</td><td><code>errorMessage { code: NOT_IN_ROOM }</code></td></tr>
+              <tr><td>E-004</td><td><code>roomMemberMuted</code></td><td>Usuario sin permisos de anfitrión</td><td><code>errorMessage { code: FORBIDDEN }</code></td></tr>
+              <tr><td>E-005</td><td><code>webrtc:offer</code></td><td>toSocketId no pertenece a sala</td><td><code>errorMessage { code: WEBRTC_SIGNAL_FORBIDDEN }</code></td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="event-card open">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">Especificaciones de Rendimiento</span>
+            <span class="event-summary">SLAs y umbrales observados</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <div class="sub-title">Latencia esperada (p95)</div>
+            <table>
+              <tr><th>Tipo de evento</th><th>Latencia objetivo</th><th>Descripción</th></tr>
+              <tr><td><code>media:status</code></td><td>&lt;200ms</td><td>Cambios de mute/video percibidos inmediatamente</td></tr>
+              <tr><td><code>message:send</code></td><td>&lt;150ms</td><td>Chat en tiempo real fluido</td></tr>
+              <tr><td><code>userJoined / userLeft</code></td><td>&lt;300ms</td><td>Replicación de presencia</td></tr>
+              <tr><td><code>webrtc:*</code></td><td>&lt;1000ms</td><td>Negociación de par; relay puro, sin procesamiento</td></tr>
+              <tr><td><code>reaction:send</code></td><td>&lt;100ms</td><td>Reacciones efímeras, impacto visual inmediato</td></tr>
+            </table>
+            <div class="sub-title" style="margin-top:1.25rem">Consumo de recursos (10 usuarios, streams AV activos)</div>
+            <table>
+              <tr><th>Métrica</th><th>Observado</th><th>Umbral de alerta</th></tr>
+              <tr><td>CPU (proceso Node)</td><td>~35%</td><td>&gt;70%</td></tr>
+              <tr><td>Memoria (RAM)</td><td>~420MB</td><td>&gt;800MB</td></tr>
+              <tr><td>Conexiones simultáneas</td><td>10 sockets</td><td>Escalable según infraestructura</td></tr>
+              <tr><td>Bitrate agregado (señalización)</td><td>~150KB/s</td><td>Bajo; streams AV viajan P2P</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="event-card open">
+          <div class="event-header" onclick="toggle(this)">
+            <span class="event-name">Herramientas y métodos de prueba</span>
+            <span class="event-summary">Recomendaciones para QA</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="event-body">
+            <p><strong>Herramientas de inspección:</strong></p>
+            <ul style="margin-left:1rem; color:var(--text-muted); font-size:0.85rem; line-height:1.8">
+              <li><strong>Chrome DevTools → Network:</strong> Inspeccionar eventos Socket.IO, latencia WS</li>
+              <li><strong>Chrome DevTools → Performance:</strong> Graficar latencia de eventos y rendering</li>
+              <li><strong>webrtc-internals (chrome://webrtc-internals):</strong> Analizar negociación ICE, bitrate, pérdida de paquetes</li>
+              <li><strong>Socket.IO Monitor:</strong> Dashboard en tiempo real de eventos y sockets</li>
+              <li><strong>Artillery / K6:</strong> Load testing de Socket.IO (simular múltiples usuarios)</li>
+            </ul>
+            <p style="margin-top:1rem"><strong>Métodos de test:</strong></p>
+            <ul style="margin-left:1rem; color:var(--text-muted); font-size:0.85rem; line-height:1.8">
+              <li><strong>Multiusuario local:</strong> Chrome + Firefox + múltiples pestañas, LAN privada</li>
+              <li><strong>Simulación de latencia:</strong> Network throttling en DevTools (3G, LTE, WiFi)</li>
+              <li><strong>Inyección de errores:</strong> Desconectar cableado, "Disconnect Network" en DevTools</li>
+              <li><strong>Análisis de logs:</strong> Servidor emite logs estructurados para cada evento</li>
+            </ul>
+          </div>
+        </div>
       </main>
     </div>
 

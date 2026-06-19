@@ -30,6 +30,8 @@ export interface RoomMessage {
 
 export interface JoinRoomPayload {
   roomId: string;
+  isMuted?: boolean;
+  isVideoOff?: boolean;
 }
 
 export interface DeleteRoomPayload {
@@ -45,6 +47,17 @@ export interface MediaStatusPayload {
   isMuted?: boolean;
   isVideoOff?: boolean;
   isScreenSharing?: boolean;
+  hasAudioTrack?: boolean;
+  hasVideoTrack?: boolean;
+  audioTrackEnabled?: boolean;
+  videoTrackEnabled?: boolean;
+  audioTrackReadyState?: string | null;
+  videoTrackReadyState?: string | null;
+  mediaPermissions?: {
+    microphone?: string;
+    camera?: string;
+  };
+  mediaError?: string | null;
 }
 
 export interface WebRtcOfferPayload {
@@ -92,15 +105,32 @@ export interface RoomMemberRemovedPayload {
   uid: string;
 }
 
+export interface RoomReactionSendPayload {
+  roomId: string;
+  emoji: string;
+}
+
+export interface RoomReactionPayload {
+  id: string;
+  roomId: string;
+  socketId: string;
+  uid: string | null;
+  username: string;
+  emoji: string;
+  createdAt: string;
+}
+
 export interface ClientToServerEvents {
   newUser: () => void;
   joinRoom: (payload: JoinRoomPayload) => void;
   deleteRoom: (payload: DeleteRoomPayload) => void;
   leaveRoom: (roomId?: string) => void;
-  roomMemberRemoved: (payload: { roomId: string }) => void;
+  roomMemberRemoved: (payload: { roomId: string; uid?: string }) => void;
+  roomMemberMuted: (payload: { roomId: string; uid: string }) => void;
   roomUsersPrevisualization: (payload: RoomUsersPrevisualizationPayload) => void;
   "message:send": (payload: MessageSendPayload) => void;
   "media:status": (payload: MediaStatusPayload) => void;
+  "reaction:send": (payload: RoomReactionSendPayload) => void;
   "webrtc:offer": (payload: WebRtcOfferPayload) => void;
   "webrtc:answer": (payload: WebRtcAnswerPayload) => void;
   "webrtc:ice-candidate": (payload: IceCandidatePayload) => void;
@@ -113,11 +143,13 @@ export interface ServerToClientEvents {
   userJoined: (user: UserPresence) => void;
   userLeft: (payload: { socketId: string; roomId: string | null }) => void;
   roomMemberRemoved: (payload: RoomMemberRemovedPayload) => void;
+  roomMemberMuted: (payload: { roomId: string; uid: string }) => void;
   roomDeleted: (payload: RoomDeletedPayload) => void;
   "message:new": (message: MessageNewPayload) => void;
   "message:error": (payload: { code: string; message: string }) => void;
   errorMessage: (payload: { code: string; message: string }) => void;
   "media:status": (payload: UserPresence) => void;
+  "reaction:new": (payload: RoomReactionPayload) => void;
   "webrtc:offer": (payload: {
     fromSocketId: string;
     roomId: string;

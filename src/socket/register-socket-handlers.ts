@@ -1,4 +1,5 @@
 import type { Server, Socket } from "socket.io";
+import { randomUUID } from "node:crypto";
 import {
   clearRoomPresence,
   getUser,
@@ -16,15 +17,100 @@ import type {
   JoinRoomPayload,
   MediaStatusPayload,
   MessageSendPayload,
+  RoomReactionSendPayload,
   ServerToClientEvents,
+  UserPresence,
   WebRtcAnswerPayload,
   WebRtcOfferPayload
 } from "../types/socket-events.js";
+import {
+  canSendRoomReaction,
+  clearRoomReactionRateLimit,
+  isAllowedRoomReaction
+} from "./room-reactions.js";
 import { AuthenticatedSocket } from "./auth.middleware.js";
 import { ChatService } from "../services/chat.service.js";
 
 type SocketServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
+
+type WebRtcSignalKind = "offer" | "answer" | "ice-candidate";
+
+const compactPresence = (user: UserPresence | undefined): Record<string, unknown> | null => {
+  if (!user) return null;
+
+  return {
+    socketId: user.socketId,
+    uid: user.uid,
+    roomId: user.roomId,
+    isMuted: user.isMuted,
+    isVideoOff: user.isVideoOff,
+    isScreenSharing: user.isScreenSharing
+  };
+};
+
+const buildRoomMediaSnapshot = (roomId: string): Record<string, unknown>[] =>
+  getUsersByRoom(roomId).map((user) => ({
+    socketId: user.socketId,
+    uid: user.uid,
+    isMuted: user.isMuted,
+    isVideoOff: user.isVideoOff,
+    isScreenSharing: user.isScreenSharing
+  }));
+
+const getSessionDescriptionType = (description: Record<string, unknown>): unknown =>
+  typeof description.type === "string" ? description.type : null;
+
+const summarizeIceCandidate = (candidate: Record<string, unknown>): Record<string, unknown> => {
+  const candidateLine = typeof candidate.candidate === "string" ? candidate.candidate : "";
+  const protocol = candidateLine.match(/\b(udp|tcp)\b/i)?.[1]?.toLowerCase() ?? null;
+  const candidateType = candidateLine.match(/ typ ([a-zA-Z0-9-]+)/)?.[1] ?? null;
+
+  return {
+    sdpMid: typeof candidate.sdpMid === "string" ? candidate.sdpMid : null,
+    sdpMLineIndex: typeof candidate.sdpMLineIndex === "number" ? candidate.sdpMLineIndex : null,
+    protocol,
+    candidateType,
+    hasCandidate: Boolean(candidateLine),
+    candidateLength: candidateLine.length
+  };
+};
+
+const logWebRtcSignalForwarded = (
+  kind: WebRtcSignalKind,
+  socket: TypedSocket,
+  roomId: string,
+  toSocketId: string,
+  details: Record<string, unknown>
+): void => {
+  logger.info(`[webrtc:${kind}] Signal forwarded`, {
+    roomId,
+    fromSocketId: socket.id,
+    toSocketId,
+    senderMedia: compactPresence(getUser(socket.id)),
+    receiverMedia: compactPresence(getUser(toSocketId)),
+    roomMediaSnapshot: buildRoomMediaSnapshot(roomId),
+    ...details
+  });
+};
+
+const logWebRtcSignalRejected = (
+  reason: string,
+  socket: TypedSocket,
+  roomId: string | undefined,
+  toSocketId: string | undefined,
+  details?: Record<string, unknown>
+): void => {
+  logger.warn("[webrtc:signal] Signal rejected", {
+    reason,
+    fromSocketId: socket.id,
+    roomId: roomId ?? null,
+    toSocketId: toSocketId ?? null,
+    senderMedia: compactPresence(getUser(socket.id)),
+    ...details
+  });
+};
+
 
 const emitUsersOnline = (io: SocketServer): void => {
   io.emit("usersOnline", getUsersOnline());
@@ -57,7 +143,7 @@ const safeLeaveRoom = (socket: TypedSocket, roomId?: string): string | undefined
     socketId: socket.id,
     uid: user?.uid,
     room: roomToLeave,
-    usersInRoom: before.map((u) => ({ socketId: u.socketId, uid: u.uid }))
+    usersInRoom: before.map((u) => compactPresence(u))
   });
 
   socket.leave(roomToLeave);
@@ -69,7 +155,7 @@ const safeLeaveRoom = (socket: TypedSocket, roomId?: string): string | undefined
   logger.info("[leaveRoom] Presence AFTER leave", {
     socketId: socket.id,
     room: roomToLeave,
-    usersInRoom: after.map((u) => ({ socketId: u.socketId, uid: u.uid }))
+    usersInRoom: after.map((u) => compactPresence(u))
   });
 
   return roomToLeave;
@@ -116,7 +202,13 @@ const handleJoinRoom = async (
 
   // ── Join new room ────────────────────────────────────────────────────────
   socket.join(roomId);
-  const updatedUser = upsertUser(socket.id, { roomId, roomOwnerUid: ownerUid, uid: uid ?? null });
+  const updatedUser = upsertUser(socket.id, {
+    roomId,
+    roomOwnerUid: ownerUid,
+    uid: uid ?? null,
+    isMuted: payload.isMuted ?? false,
+    isVideoOff: payload.isVideoOff ?? false,
+  });
   socket.to(roomId).emit("userJoined", updatedUser);
   emitRoomUsers(io, roomId);
 
@@ -124,7 +216,7 @@ const handleJoinRoom = async (
     socketId: socket.id,
     uid,
     roomId,
-    usersInRoom: getUsersByRoom(roomId).map((u) => ({ socketId: u.socketId, uid: u.uid }))
+    usersInRoom: buildRoomMediaSnapshot(roomId)
   });
 
   console.log("Sala", getUsersByRoom(roomId));
@@ -226,6 +318,12 @@ const handleMediaStatus = (io: SocketServer, socket: TypedSocket, payload: Media
   const requestedRoomId = payload.roomId?.trim();
   const current = getUser(socket.id);
   if (requestedRoomId && current?.roomId !== requestedRoomId) {
+    logger.warn("[media:status] Rejected media status outside room", {
+      socketId: socket.id,
+      uid: current?.uid ?? null,
+      requestedRoomId,
+      currentRoomId: current?.roomId ?? null
+    });
     socket.emit("errorMessage", {
       code: "NOT_IN_ROOM",
       message: "Debes estar conectado a la sala para cambiar tu estado de medios."
@@ -238,10 +336,68 @@ const handleMediaStatus = (io: SocketServer, socket: TypedSocket, payload: Media
     isVideoOff: payload.isVideoOff ?? current?.isVideoOff ?? false,
     isScreenSharing: payload.isScreenSharing ?? current?.isScreenSharing ?? false
   });
+  const roomId = requestedRoomId ?? updatedUser.roomId ?? undefined;
 
-  if (requestedRoomId) {
-    socket.to(requestedRoomId).emit("media:status", updatedUser);
+  logger.info("[media:status] User media status updated", {
+    socketId: socket.id,
+    uid: updatedUser.uid,
+    roomId: roomId ?? null,
+    previousMedia: compactPresence(current),
+    nextMedia: compactPresence(updatedUser),
+    clientMedia: {
+      hasAudioTrack: payload.hasAudioTrack ?? null,
+      hasVideoTrack: payload.hasVideoTrack ?? null,
+      audioTrackEnabled: payload.audioTrackEnabled ?? null,
+      videoTrackEnabled: payload.videoTrackEnabled ?? null,
+      audioTrackReadyState: payload.audioTrackReadyState ?? null,
+      videoTrackReadyState: payload.videoTrackReadyState ?? null,
+      mediaPermissions: payload.mediaPermissions ?? null,
+      mediaError: payload.mediaError ?? null
+    },
+    roomMediaSnapshot: roomId ? buildRoomMediaSnapshot(roomId) : []
+  });
+
+  if (roomId) {
+    socket.to(roomId).emit("media:status", updatedUser);
   }
+};
+
+const handleRoomReaction = (
+  io: SocketServer,
+  socket: TypedSocket,
+  payload: RoomReactionSendPayload
+): void => {
+  const roomId = payload.roomId?.trim();
+  const emoji = payload.emoji?.trim();
+  const user = getUser(socket.id);
+
+  if (!roomId || user?.roomId !== roomId) {
+    socket.emit("errorMessage", {
+      code: "REACTION_NOT_IN_ROOM",
+      message: "Debes estar conectado a la sala para reaccionar."
+    });
+    return;
+  }
+
+  if (!emoji || !isAllowedRoomReaction(emoji)) {
+    socket.emit("errorMessage", {
+      code: "INVALID_REACTION",
+      message: "La reaccion seleccionada no esta permitida."
+    });
+    return;
+  }
+
+  if (!canSendRoomReaction(socket.id)) return;
+
+  io.to(roomId).emit("reaction:new", {
+    id: randomUUID(),
+    roomId,
+    socketId: socket.id,
+    uid: user.uid,
+    username: user.username || user.name || "Usuario",
+    emoji,
+    createdAt: new Date().toISOString()
+  });
 };
 
 const canSignalToSocket = (
@@ -250,7 +406,9 @@ const canSignalToSocket = (
   toSocketId: string | undefined
 ): roomId is string => {
   const normalizedRoomId = roomId?.trim();
-  if (!normalizedRoomId || !toSocketId?.trim()) {
+  const normalizedTargetSocketId = toSocketId?.trim();
+  if (!normalizedRoomId || !normalizedTargetSocketId) {
+    logWebRtcSignalRejected("missing_room_or_target", socket, normalizedRoomId, normalizedTargetSocketId);
     socket.emit("errorMessage", {
       code: "INVALID_WEBRTC_SIGNAL",
       message: "roomId y toSocketId son obligatorios."
@@ -259,8 +417,14 @@ const canSignalToSocket = (
   }
 
   const sender = getUser(socket.id);
-  const receiver = getUser(toSocketId);
+  const receiver = getUser(normalizedTargetSocketId);
   if (sender?.roomId !== normalizedRoomId || receiver?.roomId !== normalizedRoomId) {
+    logWebRtcSignalRejected("sender_or_receiver_not_in_room", socket, normalizedRoomId, normalizedTargetSocketId, {
+      senderRoomId: sender?.roomId ?? null,
+      receiverRoomId: receiver?.roomId ?? null,
+      receiverMedia: compactPresence(receiver),
+      roomMediaSnapshot: buildRoomMediaSnapshot(normalizedRoomId)
+    });
     socket.emit("errorMessage", {
       code: "WEBRTC_SIGNAL_FORBIDDEN",
       message: "No puedes enviar senales WebRTC fuera de tu sala."
@@ -278,9 +442,15 @@ const handleWebRtcOffer = (
 ): void => {
   if (!canSignalToSocket(socket, payload.roomId, payload.toSocketId)) return;
 
-  io.to(payload.toSocketId).emit("webrtc:offer", {
+  const roomId = payload.roomId.trim();
+  const toSocketId = payload.toSocketId.trim();
+  logWebRtcSignalForwarded("offer", socket, roomId, toSocketId, {
+    sdpType: getSessionDescriptionType(payload.offer)
+  });
+
+  io.to(toSocketId).emit("webrtc:offer", {
     fromSocketId: socket.id,
-    roomId: payload.roomId.trim(),
+    roomId,
     offer: payload.offer
   });
 };
@@ -292,9 +462,15 @@ const handleWebRtcAnswer = (
 ): void => {
   if (!canSignalToSocket(socket, payload.roomId, payload.toSocketId)) return;
 
-  io.to(payload.toSocketId).emit("webrtc:answer", {
+  const roomId = payload.roomId.trim();
+  const toSocketId = payload.toSocketId.trim();
+  logWebRtcSignalForwarded("answer", socket, roomId, toSocketId, {
+    sdpType: getSessionDescriptionType(payload.answer)
+  });
+
+  io.to(toSocketId).emit("webrtc:answer", {
     fromSocketId: socket.id,
-    roomId: payload.roomId.trim(),
+    roomId,
     answer: payload.answer
   });
 };
@@ -306,9 +482,15 @@ const handleIceCandidate = (
 ): void => {
   if (!canSignalToSocket(socket, payload.roomId, payload.toSocketId)) return;
 
-  io.to(payload.toSocketId).emit("webrtc:ice-candidate", {
+  const roomId = payload.roomId.trim();
+  const toSocketId = payload.toSocketId.trim();
+  logWebRtcSignalForwarded("ice-candidate", socket, roomId, toSocketId, {
+    candidate: summarizeIceCandidate(payload.candidate)
+  });
+
+  io.to(toSocketId).emit("webrtc:ice-candidate", {
     fromSocketId: socket.id,
-    roomId: payload.roomId.trim(),
+    roomId,
     candidate: payload.candidate
   });
 };
@@ -373,11 +555,68 @@ export const registerSocketHandlers = (io: SocketServer): void => {
         return;
       }
 
-      io.to(roomId).emit("roomMemberRemoved", { roomId, uid });
-      const leftRoom = safeLeaveRoom(socket, roomId);
-      if (leftRoom) {
-        emitRoomUsers(io, leftRoom);
+      const targetUid = payload.uid || uid;
+
+      // Si el anfitrión está expulsando a otro miembro, validar permisos
+      if (targetUid !== uid) {
+        const requesterPresence = getUser(socket.id);
+        if (!requesterPresence || requesterPresence.roomOwnerUid !== uid) {
+          socket.emit("errorMessage", { code: "FORBIDDEN", message: "Solo el anfitrión puede expulsar miembros." });
+          return;
+        }
+
+        // Forzar la desconexión del socket del usuario expulsado en el servidor
+        const targetPresence = getUsersByRoom(roomId).find((u) => u.uid === targetUid);
+        if (targetPresence) {
+          const targetSocket = io.sockets.sockets.get(targetPresence.socketId) as TypedSocket | undefined;
+          if (targetSocket) {
+            targetSocket.leave(roomId);
+            upsertUser(targetPresence.socketId, { roomId: null, roomOwnerUid: null });
+            targetSocket.emit("roomMemberRemoved", { roomId, uid: targetUid });
+          }
+        }
       }
+
+      io.to(roomId).emit("roomMemberRemoved", { roomId, uid: targetUid });
+
+      if (targetUid === uid) {
+        const leftRoom = safeLeaveRoom(socket, roomId);
+        if (leftRoom) {
+          emitRoomUsers(io, leftRoom);
+        }
+      } else {
+        emitRoomUsers(io, roomId);
+      }
+    });
+
+    socket.on("roomMemberMuted", (payload) => {
+      const roomId = payload.roomId?.trim();
+      if (!roomId) {
+        socket.emit("errorMessage", { code: "INVALID_ROOM", message: "roomId es obligatorio." });
+        return;
+      }
+
+      if (!uid) {
+        socket.emit("errorMessage", { code: "UNAUTHORIZED", message: "Usuario no autenticado." });
+        return;
+      }
+
+      // Validar que el emisor sea el anfitrión de la sala
+      const requesterPresence = getUser(socket.id);
+      if (!requesterPresence || requesterPresence.roomOwnerUid !== uid) {
+        socket.emit("errorMessage", { code: "FORBIDDEN", message: "Solo el anfitrión puede silenciar miembros." });
+        return;
+      }
+
+      logger.info("[roomMemberMuted] Host requested participant mute", {
+        roomId,
+        hostSocketId: socket.id,
+        hostUid: uid,
+        targetUid: payload.uid,
+        roomMediaSnapshot: buildRoomMediaSnapshot(roomId)
+      });
+
+      io.to(roomId).emit("roomMemberMuted", payload);
     });
 
     socket.on("roomUsersPrevisualization", (payload) => {
@@ -393,6 +632,8 @@ export const registerSocketHandlers = (io: SocketServer): void => {
 
     socket.on("media:status", (payload) => handleMediaStatus(io, socket, payload));
 
+    socket.on("reaction:send", (payload) => handleRoomReaction(io, socket, payload));
+
     // WebRTC signalling — forward only, no presence changes
     socket.on("webrtc:offer", (payload) => handleWebRtcOffer(io, socket, payload));
 
@@ -402,6 +643,8 @@ export const registerSocketHandlers = (io: SocketServer): void => {
 
     // ── Disconnect: mirrors leaveRoom + full cleanup ──────────────────────
     socket.on("disconnect", () => {
+      const cleanupStartedAt = Date.now();
+      clearRoomReactionRateLimit(socket.id);
       const user = getUser(socket.id);
 
       // Log BEFORE removal
@@ -411,13 +654,21 @@ export const registerSocketHandlers = (io: SocketServer): void => {
           socketId: socket.id,
           uid: user.uid,
           room: user.roomId,
-          usersInRoom: before.map((u) => ({ socketId: u.socketId, uid: u.uid }))
+          userMedia: compactPresence(user),
+          usersInRoom: before.map((u) => compactPresence(u))
         });
       }
 
       const removed = removeUser(socket.id);
 
       if (removed?.roomId) {
+        logger.info("[disconnect] Emitting userLeft and releasing WebRTC presence", {
+          socketId: socket.id,
+          uid: removed.uid,
+          roomId: removed.roomId,
+          userMedia: compactPresence(removed)
+        });
+
         socket.to(removed.roomId).emit("userLeft", {
           socketId: socket.id,
           roomId: removed.roomId
@@ -429,7 +680,8 @@ export const registerSocketHandlers = (io: SocketServer): void => {
         logger.info("[disconnect] Presence AFTER cleanup", {
           socketId: socket.id,
           room: removed.roomId,
-          usersInRoom: after.map((u) => ({ socketId: u.socketId, uid: u.uid }))
+          cleanupDurationMs: Date.now() - cleanupStartedAt,
+          usersInRoom: after.map((u) => compactPresence(u))
         });
       }
 
@@ -437,6 +689,7 @@ export const registerSocketHandlers = (io: SocketServer): void => {
       logger.info("Cliente desconectado", {
         socketId: socket.id,
         uid: removed?.uid,
+        cleanupDurationMs: Date.now() - cleanupStartedAt,
         totalOnline: getUsersOnline().length
       });
     });
