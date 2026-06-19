@@ -47,6 +47,17 @@ export interface MediaStatusPayload {
   isMuted?: boolean;
   isVideoOff?: boolean;
   isScreenSharing?: boolean;
+  hasAudioTrack?: boolean;
+  hasVideoTrack?: boolean;
+  audioTrackEnabled?: boolean;
+  videoTrackEnabled?: boolean;
+  audioTrackReadyState?: string | null;
+  videoTrackReadyState?: string | null;
+  mediaPermissions?: {
+    microphone?: string;
+    camera?: string;
+  };
+  mediaError?: string | null;
 }
 
 export interface WebRtcOfferPayload {
