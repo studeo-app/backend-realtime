@@ -1,4 +1,4 @@
-const ALLOWED_ROOM_REACTIONS = new Set(["👍", "❤️", "😂", "😮", "🎉", "👏"]);
+const ALLOWED_ROOM_REACTIONS = new Set(["👍", "❤️", "😂", "😮", "🎉", "👏", "👎"]);
 const REACTION_COOLDOWN_MS = 400;
 
 const lastReactionAtBySocket = new Map<string, number>();
