@@ -314,6 +314,10 @@ socket.emit("media:status", {
 ---
 
 #### `webrtc:offer` / `webrtc:answer` / `webrtc:ice-candidate`
+El servidor actua como relay de senales WebRTC: no interpreta SDP/candidates y no transporta audio, video ni pantalla.
+La llamada usa una topologia mesh P2P: cada cliente crea un `RTCPeerConnection` por cada otro socket de la sala, intercambia `offer`, `answer` e `ice-candidate`, y luego los medios viajan directamente entre navegadores o por TURN si el navegador lo necesita.
+Antes de reenviar una senal, el servidor valida que emisor y receptor pertenezcan al mismo `roomId`; si faltan `roomId` o `toSocketId`, responde `INVALID_WEBRTC_SIGNAL`, y si alguno no esta en la sala, responde `WEBRTC_SIGNAL_FORBIDDEN`.
+
 Señalización WebRTC peer-to-peer. El servidor actúa como relay — **no interpreta** el contenido.
 
 ```ts
@@ -327,6 +331,8 @@ socket.emit("webrtc:offer", {
 **Emite:** el evento correspondiente directamente al socket `toSocketId` con `fromSocketId` añadido.
 
 ---
+
+**Documentacion visual:** [`docs/socket-events.html#webrtc`](./docs/socket-events.html#webrtc).
 
 #### `ping`
 Health check de la conexión desde el cliente.
