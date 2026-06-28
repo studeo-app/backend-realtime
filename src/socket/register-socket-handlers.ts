@@ -400,6 +400,18 @@ const handleRoomReaction = (
   });
 };
 
+/**
+ * Validates whether a WebRTC signaling packet can be relayed.
+ *
+ * Media is not routed through this service. The browser clients establish a
+ * mesh P2P call by creating one RTCPeerConnection per remote socket and using
+ * Socket.IO only to exchange offer, answer and ICE candidate payloads. Once
+ * ICE succeeds, audio/video/screen tracks flow directly browser-to-browser, or
+ * through a TURN server when the browser cannot use a direct/STUN path.
+ *
+ * This guard keeps signaling scoped to a room: both sender and receiver must be
+ * present in the requested room before the server forwards the packet.
+ */
 const canSignalToSocket = (
   socket: TypedSocket,
   roomId: string | undefined,
@@ -435,6 +447,13 @@ const canSignalToSocket = (
   return true;
 };
 
+/**
+ * Relays an SDP offer to one peer in the same room.
+ *
+ * The payload is intentionally opaque to the server; only room membership and
+ * target socket are validated. The receiver gets the same offer plus
+ * fromSocketId so it can answer the correct peer connection.
+ */
 const handleWebRtcOffer = (
   io: SocketServer,
   socket: TypedSocket,
@@ -455,6 +474,11 @@ const handleWebRtcOffer = (
   });
 };
 
+/**
+ * Relays an SDP answer to the peer that created the offer.
+ *
+ * Like offers, answers are not parsed or modified beyond adding fromSocketId.
+ */
 const handleWebRtcAnswer = (
   io: SocketServer,
   socket: TypedSocket,
@@ -475,6 +499,12 @@ const handleWebRtcAnswer = (
   });
 };
 
+/**
+ * Relays an ICE candidate to one peer in the same room.
+ *
+ * Candidates may represent host, srflx/STUN or relay/TURN routes; the server
+ * only forwards them and logs a compact summary for debugging.
+ */
 const handleIceCandidate = (
   io: SocketServer,
   socket: TypedSocket,

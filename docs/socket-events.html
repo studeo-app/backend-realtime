@@ -813,6 +813,18 @@ socket.emit(<span class="hlstring">"leaveRoom"</span>, <span class="hlstring">"a
             <span class="chevron">▼</span>
           </div>
           <div class="event-body">
+            <p>
+              La sala usa una topologia mesh P2P: cada cliente crea un <code>RTCPeerConnection</code>
+              por cada otro socket presente en <code>roomUsers</code>. Socket.IO solo transporta
+              senalizacion: <code>offer</code>, <code>answer</code> e <code>ice-candidate</code>.
+              El audio, video y pantalla no pasan por este servidor; viajan directamente entre
+              navegadores cuando ICE encuentra ruta directa/STUN, o por TURN si el navegador lo necesita.
+            </p>
+            <p>
+              El servidor valida que emisor y receptor pertenezcan al mismo <code>roomId</code>
+              antes de reenviar cada senal. No modifica SDP/candidates: solo agrega
+              <code>fromSocketId</code> para que el receptor responda al peer correcto.
+            </p>
             <p>El servidor actúa como relay — reenvía el payload directamente al socket destino sin interpretarlo. Se añade <code>fromSocketId</code> para que el receptor sepa el origen.</p>
             <div class="sub-title">Payload (igual para los tres eventos)</div>
             <pre>socket.emit(<span class="hlstring">"webrtc:offer"</span>, {

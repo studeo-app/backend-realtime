@@ -88,11 +88,12 @@ Esta base habilita el camino para:
 1. Cliente conecta -> se registra presencia.
 2. Cliente define username (`newUser`).
 3. Cliente entra a sala (`joinRoom`) -> se emiten `userJoined` + `roomUsers`.
-4. Cliente envia texto (`sendMessage`) -> broadcast en sala + persistencia temporal.
-5. Cliente solicita historial (`requestChatHistory`).
-6. Clientes intercambian signaling WebRTC (`webrtc:*`).
-7. Cliente actualiza estado AV (`media:status`).
-8. Cliente sale o se desconecta -> limpieza + notificaciones.
+4. Cliente envia texto (`message:send`) -> broadcast `message:new` + persistencia asincrona en Firestore.
+5. El historial se lee por HTTP desde el backend NestJS (`GET /api/rooms/:roomId/messages`).
+6. Clientes intercambian signaling WebRTC (`webrtc:offer`, `webrtc:answer`, `webrtc:ice-candidate`).
+7. El servidor solo reenvia senales P2P: los medios viajan navegador a navegador o por TURN si ICE lo requiere.
+8. Cliente actualiza estado AV (`media:status`).
+9. Cliente sale o se desconecta -> limpieza + notificaciones.
 
 ## 5) Preparado para proxima iteracion
 
@@ -105,10 +106,13 @@ Para cumplir completamente TS-02/US-11 en produccion:
 
 ## Seguridad y hardening
 
-En sprint posterior se recomienda:
+Implementado:
 
 - auth de sockets con token Firebase (`io.use` middleware).
-- rate limit / anti-spam para `sendMessage`.
+
+En sprint posterior se recomienda:
+
+- rate limit / anti-spam para `message:send`.
 - validacion robusta de payloads (ej. `zod`).
 
 ## Escalado
