@@ -58,6 +58,43 @@ const buildRoomMediaSnapshot = (roomId: string): Record<string, unknown>[] =>
     isScreenSharing: user.isScreenSharing
   }));
 
+const buildMediaChangeLogEntries = (
+  previous: UserPresence | undefined,
+  next: UserPresence
+): Record<string, unknown>[] => {
+  const changes: Record<string, unknown>[] = [];
+  if (!previous) return changes;
+
+  if (previous.isMuted !== next.isMuted) {
+    changes.push({
+      device: "microphone",
+      action: next.isMuted ? "turned_off" : "turned_on",
+      previous: !previous.isMuted,
+      next: !next.isMuted
+    });
+  }
+
+  if (previous.isVideoOff !== next.isVideoOff) {
+    changes.push({
+      device: "camera",
+      action: next.isVideoOff ? "turned_off" : "turned_on",
+      previous: !previous.isVideoOff,
+      next: !next.isVideoOff
+    });
+  }
+
+  if (previous.isScreenSharing !== next.isScreenSharing) {
+    changes.push({
+      device: "screen",
+      action: next.isScreenSharing ? "started_sharing" : "stopped_sharing",
+      previous: previous.isScreenSharing,
+      next: next.isScreenSharing
+    });
+  }
+
+  return changes;
+};
+
 const getSessionDescriptionType = (description: Record<string, unknown>): unknown =>
   typeof description.type === "string" ? description.type : null;
 
@@ -355,6 +392,27 @@ const handleMediaStatus = (io: SocketServer, socket: TypedSocket, payload: Media
       mediaError: payload.mediaError ?? null
     },
     roomMediaSnapshot: roomId ? buildRoomMediaSnapshot(roomId) : []
+  });
+
+  const mediaChanges = buildMediaChangeLogEntries(current, updatedUser);
+  mediaChanges.forEach((change) => {
+    logger.info("[media:status:change] User toggled media device", {
+      socketId: socket.id,
+      uid: updatedUser.uid,
+      username: updatedUser.username,
+      roomId: roomId ?? null,
+      ...change,
+      clientMedia: {
+        hasAudioTrack: payload.hasAudioTrack ?? null,
+        hasVideoTrack: payload.hasVideoTrack ?? null,
+        audioTrackEnabled: payload.audioTrackEnabled ?? null,
+        videoTrackEnabled: payload.videoTrackEnabled ?? null,
+        audioTrackReadyState: payload.audioTrackReadyState ?? null,
+        videoTrackReadyState: payload.videoTrackReadyState ?? null,
+        mediaPermissions: payload.mediaPermissions ?? null,
+        mediaError: payload.mediaError ?? null
+      }
+    });
   });
 
   if (roomId) {
