@@ -138,6 +138,8 @@ Estos endpoints son de infraestructura. La logica de salas ocurre por Socket.IO.
 | `webrtc:offer` | `{ roomId, toSocketId, offer }` | Reenvia oferta SDP |
 | `webrtc:answer` | `{ roomId, toSocketId, answer }` | Reenvia respuesta SDP |
 | `webrtc:ice-candidate` | `{ roomId, toSocketId, candidate }` | Reenvia ICE candidate |
+| `caption:update` | `{ roomId, text, isFinal }` | Reenvia un subtítulo generado por el cliente que los activó |
+| `caption:clear` | `{ roomId }` | Limpia el subtítulo activo del emisor para la sala |
 | `ping` | ninguno | Responde `pong` |
 
 ## Eventos Servidor a Cliente
@@ -159,7 +161,30 @@ Estos endpoints son de infraestructura. La logica de salas ocurre por Socket.IO.
 | `webrtc:offer` | `{ fromSocketId, roomId, offer }` | Oferta reenviada |
 | `webrtc:answer` | `{ fromSocketId, roomId, answer }` | Respuesta reenviada |
 | `webrtc:ice-candidate` | `{ fromSocketId, roomId, candidate }` | ICE candidate reenviado |
+| `caption:update` | `{ roomId, socketId, uid, username, text, isFinal, updatedAt }` | Envía un subtítulo a los participantes de la sala |
+| `caption:clear` | `{ roomId, socketId, uid, username, updatedAt }` | Limpia el subtítulo activo del emisor en la sala |
 | `pong` | ninguno | Respuesta a `ping` |
+
+## Subtítulos en tiempo real
+
+Los subtítulos no pasan por el backend como audio ni como video. El flujo actual es:
+
+1. El frontend activa la transcripción local del micrófono del usuario que habilitó los subtítulos.
+2. El cliente emite `caption:update` con el texto reconocido.
+3. El servidor Socket.IO reenvía el payload a todos los sockets conectados a la misma sala mediante `caption:update`.
+4. El frontend muestra el texto sobre el tile del participante correspondiente.
+
+### Validaciones del servidor
+
+- El evento solo se acepta si el socket está unido a la sala indicada.
+- Se rechaza silenciosamente cuando el texto está vacío.
+- El texto se recorta a 240 caracteres antes de reenviarlo.
+- `caption:clear` se usa para limpiar el subtítulo activo del emisor en la sala.
+
+### Comportamiento esperado en frontend
+
+- Si no se puede activar la transcripción local (micrófono bloqueado, navegador sin soporte, error del worker o fallo del flujo), el frontend muestra un toast de error y conserva la llamada activa.
+- El usuario que activó los subtítulos puede detenerlos en cualquier momento y el estado se limpia para la sala.
 
 ## Persistencia
 
