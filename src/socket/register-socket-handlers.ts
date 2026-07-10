@@ -17,6 +17,8 @@ import type {
   JoinRoomPayload,
   MediaStatusPayload,
   MessageSendPayload,
+  RoomCaptionClearPayload,
+  RoomCaptionSendPayload,
   RoomReactionSendPayload,
   ServerToClientEvents,
   UserPresence,
@@ -458,6 +460,55 @@ const handleRoomReaction = (
   });
 };
 
+const handleCaptionUpdate = (
+  io: SocketServer,
+  socket: TypedSocket,
+  payload: RoomCaptionSendPayload
+): void => {
+  const roomId = payload.roomId?.trim();
+  const text = payload.text?.trim().slice(0, 240);
+  const user = getUser(socket.id);
+
+  if (!roomId || user?.roomId !== roomId) {
+    socket.emit("errorMessage", {
+      code: "CAPTION_NOT_IN_ROOM",
+      message: "Debes estar conectado a la sala para enviar subtitulos."
+    });
+    return;
+  }
+
+  if (!text) return;
+
+  io.to(roomId).emit("caption:update", {
+    roomId,
+    socketId: socket.id,
+    uid: user.uid,
+    username: user.username || user.name || "Usuario",
+    text,
+    isFinal: Boolean(payload.isFinal),
+    updatedAt: new Date().toISOString()
+  });
+};
+
+const handleCaptionClear = (
+  io: SocketServer,
+  socket: TypedSocket,
+  payload: RoomCaptionClearPayload
+): void => {
+  const roomId = payload.roomId?.trim();
+  const user = getUser(socket.id);
+
+  if (!roomId || user?.roomId !== roomId) return;
+
+  io.to(roomId).emit("caption:clear", {
+    roomId,
+    socketId: socket.id,
+    uid: user.uid,
+    username: user.username || user.name || "Usuario",
+    updatedAt: new Date().toISOString()
+  });
+};
+
 /**
  * Validates whether a WebRTC signaling packet can be relayed.
  *
@@ -658,8 +709,7 @@ export const registerSocketHandlers = (io: SocketServer): void => {
         if (targetPresence) {
           const targetSocket = io.sockets.sockets.get(targetPresence.socketId) as TypedSocket | undefined;
           if (targetSocket) {
-            targetSocket.leave(roomId);
-            upsertUser(targetPresence.socketId, { roomId: null, roomOwnerUid: null });
+            safeLeaveRoom(targetSocket, roomId);
             targetSocket.emit("roomMemberRemoved", { roomId, uid: targetUid });
           }
         }
@@ -721,6 +771,8 @@ export const registerSocketHandlers = (io: SocketServer): void => {
     socket.on("media:status", (payload) => handleMediaStatus(io, socket, payload));
 
     socket.on("reaction:send", (payload) => handleRoomReaction(io, socket, payload));
+    socket.on("caption:update", (payload) => handleCaptionUpdate(io, socket, payload));
+    socket.on("caption:clear", (payload) => handleCaptionClear(io, socket, payload));
 
     // WebRTC signalling — forward only, no presence changes
     socket.on("webrtc:offer", (payload) => handleWebRtcOffer(io, socket, payload));

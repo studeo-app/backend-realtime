@@ -120,6 +120,26 @@ export interface RoomReactionPayload {
   createdAt: string;
 }
 
+export interface RoomCaptionSendPayload {
+  roomId: string;
+  text: string;
+  isFinal?: boolean;
+}
+
+export interface RoomCaptionClearPayload {
+  roomId: string;
+}
+
+export interface RoomCaptionPayload {
+  roomId: string;
+  socketId: string;
+  uid: string | null;
+  username: string;
+  text: string;
+  isFinal: boolean;
+  updatedAt: string;
+}
+
 export interface ClientToServerEvents {
   newUser: () => void;
   joinRoom: (payload: JoinRoomPayload) => void;
@@ -131,6 +151,8 @@ export interface ClientToServerEvents {
   "message:send": (payload: MessageSendPayload) => void;
   "media:status": (payload: MediaStatusPayload) => void;
   "reaction:send": (payload: RoomReactionSendPayload) => void;
+  "caption:update": (payload: RoomCaptionSendPayload) => void;
+  "caption:clear": (payload: RoomCaptionClearPayload) => void;
   "webrtc:offer": (payload: WebRtcOfferPayload) => void;
   "webrtc:answer": (payload: WebRtcAnswerPayload) => void;
   "webrtc:ice-candidate": (payload: IceCandidatePayload) => void;
@@ -150,6 +172,8 @@ export interface ServerToClientEvents {
   errorMessage: (payload: { code: string; message: string }) => void;
   "media:status": (payload: UserPresence) => void;
   "reaction:new": (payload: RoomReactionPayload) => void;
+  "caption:update": (payload: RoomCaptionPayload) => void;
+  "caption:clear": (payload: Omit<RoomCaptionPayload, "text" | "isFinal">) => void;
   "webrtc:offer": (payload: {
     fromSocketId: string;
     roomId: string;
